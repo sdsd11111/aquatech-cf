@@ -34,9 +34,9 @@ export default async function NewQuotePage({ searchParams }: { searchParams: { p
             clientId: prefetchedProject.clientId,
             items: prefetchedProject.budgetItems.map(bi => ({
                 materialId: bi.materialId,
-                description: bi.material.name,
+                description: bi.material?.name || 'Material sin nombre',
                 quantity: Number(bi.quantity),
-                unitPrice: Number(bi.material.unitPrice)
+                unitPrice: Number(bi.material?.unitPrice || 0)
             }))
         } : null}
       />
