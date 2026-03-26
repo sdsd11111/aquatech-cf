@@ -1,7 +1,7 @@
 // ============================================================
 // Aquatech CRM — Custom Service Worker (Offline-First)
 // ============================================================
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v5';
 const STATIC_CACHE = `aquatech-static-${CACHE_VERSION}`;
 const PAGES_CACHE  = `aquatech-pages-${CACHE_VERSION}`;
 const ASSETS_CACHE = `aquatech-assets-${CACHE_VERSION}`;
@@ -68,9 +68,44 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── Next.js auth endpoints → Network Only
+  // ── Next.js auth endpoints → Network Only with Shadow Fallback
+  if (url.pathname === '/api/auth/session') {
+    event.respondWith(
+      fetch(request).catch(async () => {
+        // Network failed (offline), try shadow auth from IndexedDB
+        try {
+          const auth = await getAuthFromIndexedDB();
+          if (auth) {
+            return new Response(JSON.stringify({
+              user: {
+                name: auth.name,
+                email: auth.username,
+                role: auth.role,
+                image: null,
+                id: auth.userId
+              },
+              expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+            }), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+        } catch (err) {
+          console.error('[SW] Auth shadow fallback failed', err);
+        }
+        
+        // Final fallback: no session
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      })
+    );
+    return;
+  }
+
   if (url.pathname.startsWith('/api/auth')) {
-    return; // Let browser handle naturally
+    return; // Let browser handle other auth naturally
   }
 
   // ── Google Fonts → Cache First (long-lived)
@@ -205,6 +240,34 @@ function fetchWithTimeout(request, timeoutMs) {
  */
 function isStaticAsset(pathname) {
   return /\.(?:js|css|woff2?|ttf|otf|eot|ico|png|jpg|jpeg|gif|svg|webp|avif|mp4|webm)$/i.test(pathname);
+}
+
+/**
+ * Helper to read shadow auth from IndexedDB inside a Service Worker.
+ */
+function getAuthFromIndexedDB() {
+  return new Promise((resolve, reject) => {
+    // We use the same name as in db.ts: AquatechOfflineDB
+    const request = indexedDB.open('AquatechOfflineDB');
+    
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      
+      // Dexie version 2 has 'auth' store with 'id' as primary key
+      try {
+        const transaction = db.transaction(['auth'], 'readonly');
+        const store = transaction.objectStore('auth');
+        const getRequest = store.get('last_session');
+        
+        getRequest.onsuccess = () => resolve(getRequest.result);
+        getRequest.onerror = () => reject(getRequest.error);
+      } catch (err) {
+        // If 'auth' store doesn't exist yet (v1), fallback peacefully
+        resolve(null);
+      }
+    };
+  });
 }
 
 // ─── MESSAGES ───────────────────────────────────────────────

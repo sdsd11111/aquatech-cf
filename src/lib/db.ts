@@ -11,13 +11,24 @@ export interface OutboxItem {
   status: 'pending' | 'syncing' | 'failed';
 }
 
+export interface AuthCache {
+  id: string; // 'last_session'
+  username: string;
+  name: string;
+  role: 'ADMIN' | 'OPERATOR';
+  userId: string;
+  lastLogin: number;
+}
+
 export class OfflineDatabase extends Dexie {
   outbox!: Table<OutboxItem>;
+  auth!: Table<AuthCache>;
 
   constructor() {
     super('AquatechOfflineDB');
-    this.version(1).stores({
-      outbox: '++id, projectId, status, timestamp'
+    this.version(2).stores({
+      outbox: '++id, projectId, status, timestamp',
+      auth: 'id'
     });
   }
 }

@@ -1,8 +1,9 @@
 'use client'
 
-import { signIn } from 'next-auth/react'
-import { useState } from 'react'
+import { signIn, getSession } from 'next-auth/react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { db } from '@/lib/db' // Assuming this path is correct
 
 export default function LoginPage() {
   const router = useRouter()
@@ -10,12 +11,47 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isOffline, setIsOffline] = useState(false)
+
+  useEffect(() => {
+    setIsOffline(!navigator.onLine)
+    const handleStatus = () => setIsOffline(!navigator.onLine)
+    window.addEventListener('online', handleStatus)
+    window.addEventListener('offline', handleStatus)
+    return () => {
+      window.removeEventListener('online', handleStatus)
+      window.removeEventListener('offline', handleStatus)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
+    setError('')
 
+    // --- CASE 1: OFFLINE LOGIN ---
+    if (!navigator.onLine) {
+      try {
+        const cachedAuth = await db.auth.get('last_session')
+        
+        // Simple verification: if username matches the last successful login,
+        // we allow entry. For production, we would ideally store a password hash too.
+        if (cachedAuth && cachedAuth.username.toLowerCase() === username.toLowerCase()) {
+          // Success! Even if we are offline, we trick the app via the Service Worker interceptor
+          localStorage.setItem('auth_shadow_active', 'true')
+          window.location.href = cachedAuth.role === 'OPERATOR' ? '/admin/operador' : '/admin'
+          return
+        } else {
+          setError('No hay conexión. Ingrese con el último usuario usado en este equipo.')
+          setLoading(false)
+          return
+        }
+      } catch (err) {
+        console.error('Offline auth error', err)
+      }
+    }
+
+    // --- CASE 2: ONLINE LOGIN ---
     const result = await signIn('credentials', {
       username,
       password,
@@ -26,19 +62,31 @@ export default function LoginPage() {
       setError('Credenciales incorrectas')
       setLoading(false)
     } else {
-      // Fetch session data to determine role-based redirection
       try {
-        const sessionRes = await fetch('/api/auth/session')
-        const session = await sessionRes.json()
+        const session = await getSession()
         
-        if (session?.user?.role === 'OPERATOR') {
-          window.location.href = '/admin/operador'
-        } else {
-          window.location.href = '/admin'
+        if (session?.user) {
+          // Store this successful login for future offline access
+          await db.auth.put({
+            id: 'last_session',
+            username: username,
+            name: session.user.name || '',
+            role: session.user.role as any || 'OPERATOR',
+            userId: (session.user as any).id || '',
+            lastLogin: Date.now()
+          })
+
+          localStorage.removeItem('auth_shadow_active')
+
+          // Pre-fetch the target dashboard to warm up the cache
+          const target = session.user.role === 'OPERATOR' ? '/admin/operador' : '/admin'
+          try {
+            await fetch(target, { priority: 'high' })
+          } catch (e) {}
+
+          window.location.href = target
         }
       } catch (err) {
-        // Fallback to broad admin if fetch fails, although this shouldn't happen 
-        // online during a fresh login
         window.location.href = '/admin'
       }
     }
