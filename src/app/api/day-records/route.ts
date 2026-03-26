@@ -9,8 +9,9 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions)
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       
-    const { projectId, location } = await req.json()
+    const { projectId, location, createdAt } = await req.json()
     const userId = Number(session.user.id)
+    const startTime = createdAt ? new Date(createdAt) : new Date()
 
     // Check if there is an active day record for this user and project
     const existing = await prisma.dayRecord.findFirst({
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
       data: {
         userId,
         projectId: Number(projectId),
-        startTime: new Date(),
+        startTime,
         startLat: location?.lat,
         startLng: location?.lng,
       }
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
         userId,
         type: 'DAY_START',
         content: `${session.user.name} inició su jornada.`,
+        createdAt: startTime
       }
     })
 
@@ -54,11 +56,12 @@ export async function PUT(req: Request) {
     const session = await getServerSession(authOptions)
     if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
       
-    const { recordId, projectId } = await req.json()
+    const { recordId, projectId, createdAt } = await req.json()
+    const endTime = createdAt ? new Date(createdAt) : new Date()
 
     const record = await prisma.dayRecord.update({
       where: { id: Number(recordId) },
-      data: { endTime: new Date() }
+      data: { endTime }
     })
 
     await prisma.chatMessage.create({
@@ -67,6 +70,7 @@ export async function PUT(req: Request) {
         userId: Number(session.user.id),
         type: 'DAY_END',
         content: `${session.user.name} terminó su jornada.`,
+        createdAt: endTime
       }
     })
 

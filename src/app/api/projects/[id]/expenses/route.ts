@@ -9,15 +9,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const session = await getServerSession(authOptions)
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       
-    const { amount, description, date, lat, lng } = await req.json()
+    const { amount, description, date, createdAt, lat, lng } = await req.json()
     const projectId = Number(id)
     const userId = Number(session.user.id)
+    const expenseDate = new Date(date || createdAt || new Date())
 
     const expense = await prisma.expense.create({
       data: {
         amount,
         description,
-        date: new Date(date),
+        date: expenseDate,
         projectId,
         userId,
         lat: lat ? Number(lat) : null,

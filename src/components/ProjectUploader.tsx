@@ -49,10 +49,33 @@ export default function ProjectUploader({
     if (!selectedFiles || selectedFiles.length === 0) return
 
     setIsUploading(true)
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
     
     try {
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i]
+
+        if (!isOnline) {
+          // Offline Mode: Convert to base64 locally
+          const reader = new FileReader()
+          const base64: string = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+
+          const localFile = {
+            url: base64, // Local preview/base64 for outbox
+            filename: file.name,
+            mimeType: file.type,
+            type: (file.type.startsWith('image/') ? 'IMAGE' : (file.type.startsWith('video/') ? 'VIDEO' : 'DOCUMENT')) as 'IMAGE' | 'VIDEO' | 'DOCUMENT'
+          }
+          
+          onAddFile(localFile)
+          continue
+        }
+
+        // Online Mode: Normal upload
         const formData = new FormData()
         formData.append('file', file)
 
@@ -67,8 +90,12 @@ export default function ProjectUploader({
         onAddFile(data)
       }
     } catch (error) {
-      console.error('Error uploading files:', error)
-      alert('Error al subir archivos. Por favor intente de nuevo.')
+      console.error('Error handling files:', error)
+      if (isOnline) {
+        alert('Error al subir archivos. Por favor intente de nuevo.')
+      } else {
+        alert('Error al procesar archivos offline.')
+      }
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''

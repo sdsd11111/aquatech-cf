@@ -41,34 +41,36 @@ export default function OperatorProjectClient({
          let endpoint = ''
          let method = 'POST'
          
-         if (item.type === 'MESSAGE' || item.type === 'MEDIA_UPLOAD') {
-           endpoint = `/api/projects/${project.id}/messages`
-         } else if (item.type === 'EXPENSE') {
-           endpoint = `/api/projects/${project.id}/expenses`
-         } else if (item.type === 'DAY_START') {
-           endpoint = `/api/day-records`
-         } else if (item.type === 'DAY_END') {
-           endpoint = `/api/day-records`
-           method = 'PUT'
-         } else if (item.type === 'PHASE_COMPLETE') {
-           endpoint = `/api/projects/${project.id}/phases/${item.payload.phaseId}`
-           method = 'PATCH'
-         }
-         
-         if (endpoint) {
-            const res = await fetch(endpoint, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                  ...item.payload, 
-                  lat: item.lat, 
-                  lng: item.lng, 
-                  createdAt: new Date(item.timestamp).toISOString() 
-                })
-            })
-            if (res.ok) await db.outbox.delete(item.id!)
-            else await db.outbox.update(item.id!, { status: 'failed' })
-         }
+          const isMedia = item.type === 'MESSAGE' || item.type === 'MEDIA_UPLOAD'
+          if (isMedia) {
+            endpoint = `/api/projects/${project.id}/messages`
+          } else if (item.type === 'EXPENSE') {
+            endpoint = `/api/projects/${project.id}/expenses`
+          } else if (item.type === 'DAY_START') {
+            endpoint = `/api/day-records`
+          } else if (item.type === 'DAY_END') {
+            endpoint = `/api/day-records`
+            method = 'PUT'
+          } else if (item.type === 'PHASE_COMPLETE') {
+            endpoint = `/api/projects/${project.id}/phases/${item.payload.phaseId}`
+            method = 'PATCH'
+          }
+          
+          if (endpoint) {
+             const res = await fetch(endpoint, {
+                 method,
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ 
+                   ...item.payload, 
+                   lat: item.lat, 
+                   lng: item.lng, 
+                   createdAt: new Date(item.timestamp).toISOString(),
+                   isOfflineSync: true 
+                 })
+             })
+             if (res.ok) await db.outbox.delete(item.id!)
+             else await db.outbox.update(item.id!, { status: 'failed' })
+          }
        } catch (e) {
           await db.outbox.update(item.id!, { status: 'pending' })
        }
@@ -431,18 +433,25 @@ export default function OperatorProjectClient({
         })
       }
 
+      const isOffline = !navigator.onLine
+      const isBase64 = file.url.startsWith('data:')
+
       const payload = { 
         phaseId: activePhase || project.phases[0]?.id, 
         content: '', 
         type: file.type,
-        media: {
+        media: isBase64 ? {
+          base64: file.url,
+          filename: file.filename,
+          mimeType: file.mimeType
+        } : {
           url: file.url,
           filename: file.filename,
           mimeType: file.mimeType
         }
       }
 
-      if (!navigator.onLine) {
+      if (isOffline) {
         await db.outbox.add({
           type: 'MEDIA_UPLOAD',
           projectId: project.id,
@@ -452,7 +461,7 @@ export default function OperatorProjectClient({
           lng: location?.lng,
           status: 'pending'
         })
-        router.refresh() // Show as pending in chat if desired (handled by combinedChat)
+        router.refresh()
         setLoading(false)
         return
       }
@@ -500,10 +509,11 @@ export default function OperatorProjectClient({
         userId: userId,
         userName: 'Yo (Pendiente)',
         content: item.payload.content || (item.type === 'MEDIA_UPLOAD' ? '[Archivo]' : ''),
-        type: item.payload.type,
+        type: item.payload.type || item.type,
         createdAt: new Date(item.timestamp).toISOString(),
         isMe: true,
         isPending: true,
+        status: item.status, // Add status
         lat: item.lat,
         lng: item.lng,
         media: item.payload.media ? [{ url: item.payload.media.url || item.payload.media.base64, filename: item.payload.media.filename, mimeType: item.payload.media.mimeType }] : []
@@ -843,9 +853,13 @@ export default function OperatorProjectClient({
                         )}
                         {msg.content}
                         {msg.isPending && (
-                           <div style={{ fontSize: '0.65rem', marginTop: '4px', opacity: 0.7, display: 'flex', alignItems: 'center', gap: '3px', fontStyle: 'italic' }}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                              Pendiente de sincronización...
+                           <div style={{ fontSize: '0.65rem', marginTop: '4px', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px', fontStyle: 'italic', color: msg.status === 'failed' ? '#ef4444' : 'inherit' }}>
+                              {msg.status === 'syncing' ? (
+                                <div style={{ width: '10px', height: '10px', border: '1.5px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                              ) : (
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              )}
+                              {msg.status === 'syncing' ? 'Sincronizando...' : msg.status === 'failed' ? 'Error. Reintentando...' : 'Pendiente de sincronización'}
                            </div>
                         )}
                       </div>
