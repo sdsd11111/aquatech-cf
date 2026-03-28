@@ -44,6 +44,7 @@ export async function POST(req: Request) {
 
     const quote = await prisma.quote.create({
       data: {
+        userId: session?.user?.id ? Number(session.user.id) : null,
         clientId: finalClientId,
         projectId: data.projectId ? Number(data.projectId) : null,
         status: data.status || 'BORRADOR',
