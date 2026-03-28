@@ -1,7 +1,7 @@
 // ============================================================
 // Aquatech CRM — Custom Service Worker (Offline-First) v14
 // ============================================================
-const CACHE_VERSION = 'v18';
+const CACHE_VERSION = 'v19';
 const STATIC_CACHE = `aquatech-static-${CACHE_VERSION}`;
 const PAGES_CACHE  = `aquatech-pages-${CACHE_VERSION}`;
 const ASSETS_CACHE = `aquatech-assets-${CACHE_VERSION}`;
@@ -197,7 +197,7 @@ async function rscNetworkFirst(request) {
 async function navigationHandler(request) {
   try {
     const response = await fetchWithTimeout(request, 8000);
-    if (response.ok || response.type === 'opaqueredirect') {
+    if (response.ok && response.status === 200) {
       const cache = await caches.open(PAGES_CACHE);
       cache.put(request, response.clone());
     }
@@ -372,8 +372,8 @@ self.addEventListener('sync', (event) => {
  */
 function openAquatechDB() {
   return new Promise((resolve, reject) => {
-    // We strictly use version 3 because that's our Dexie schema version
-    const request = indexedDB.open('aquatech-db', 3);
+    // Corrected DB name to match Dexie instance 'AquatechOfflineDB'
+    const request = indexedDB.open('AquatechOfflineDB', 3);
     
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);

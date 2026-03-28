@@ -26,8 +26,41 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
   const [isAddingExpense, setIsAddingExpense] = useState(false)
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseDesc, setExpenseDesc] = useState('')
+  const [expensePhoto, setExpensePhoto] = useState<string | null>(null)
   const [isSavingExpense, setIsSavingExpense] = useState(false)
   const [isFichaOpen, setIsFichaOpen] = useState(false)
+
+  const compressImage = (base64: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.src = base64
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const MAX_WIDTH = 1000
+        const MAX_HEIGHT = 1000
+        let width = img.width
+        let height = img.height
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width
+            width = MAX_WIDTH
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height
+            height = MAX_HEIGHT
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.7))
+      }
+    })
+  }
   
   const handleDownload = async (url: string, filename: string) => {
     try {
@@ -59,12 +92,14 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
         body: JSON.stringify({
           amount: Number(expenseAmount),
           description: expenseDesc,
-          date: new Date().toISOString()
+          date: new Date().toISOString(),
+          receiptPhoto: expensePhoto
         })
       })
       if (resp.ok) {
         setExpenseAmount('')
         setExpenseDesc('')
+        setExpensePhoto(null)
         setIsAddingExpense(false)
         router.refresh() // Recargar datos para ver el nuevo gasto en la tabla y barra
       } else {
@@ -870,30 +905,70 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                 </div>
               </div>
 
-              {isAddingExpense && (
-                <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', marginBottom: '15px', border: '1px solid var(--primary)', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  <input 
-                    type="number" 
-                    placeholder="$$" 
-                    value={expenseAmount}
-                    onChange={e => setExpenseAmount(e.target.value)}
-                    style={{ width: '80px', padding: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '4px', color: 'white' }}
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Descripción (ej: Pago a Pedro)" 
-                    value={expenseDesc}
-                    onChange={e => setExpenseDesc(e.target.value)}
-                    style={{ flex: 1, minWidth: '150px', padding: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '4px', color: 'white' }}
-                  />
-                  <div style={{ display: 'flex', gap: '4px', width: '100%', justifyContent: 'flex-end', marginTop: '4px' }}>
-                    <button onClick={() => setIsAddingExpense(false)} style={{ padding: '4px 8px', fontSize: '0.75rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancel</button>
+               {isAddingExpense && (
+                <div style={{ padding: '16px', backgroundColor: 'var(--bg-surface)', borderRadius: '12px', marginBottom: '15px', border: '1px solid var(--primary)', boxShadow: '0 4px 12px rgba(56, 189, 248, 0.1)' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+                    <input 
+                      type="number" 
+                      placeholder="Monto ($)" 
+                      value={expenseAmount}
+                      onChange={e => setExpenseAmount(e.target.value)}
+                      style={{ width: '100px', padding: '10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white' }}
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Descripción (ej: Material PVC)" 
+                      value={expenseDesc}
+                      onChange={e => setExpenseDesc(e.target.value)}
+                      style={{ flex: 1, minWidth: '180px', padding: '10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white' }}
+                    />
+                  </div>
+                  
+                  <div style={{ marginBottom: '12px' }}>
+                    {!expensePhoto ? (
+                      <label className="btn btn-ghost" style={{ width: '100%', border: '1px dashed var(--primary)', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', borderRadius: '8px', fontSize: '0.85rem' }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        Escanear Recibo (Foto)
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          capture="environment" 
+                          style={{ display: 'none' }} 
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0]
+                            if (file) {
+                              const reader = new FileReader()
+                              reader.onloadend = async () => {
+                                const compressed = await compressImage(reader.result as string)
+                                setExpensePhoto(compressed)
+                              }
+                              reader.readAsDataURL(file)
+                            }
+                          }} 
+                        />
+                      </label>
+                    ) : (
+                      <div style={{ position: 'relative', width: '100%', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                        <img src={expensePhoto} alt="Recibo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <button 
+                          type="button" 
+                          style={{ position: 'absolute', top: '5px', right: '5px', backgroundColor: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer' }}
+                          onClick={() => setExpensePhoto(null)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button onClick={() => { setIsAddingExpense(false); setExpensePhoto(null); }} style={{ padding: '8px 16px', fontSize: '0.85rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancelar</button>
                     <button 
                       onClick={handleAddExpense} 
                       disabled={isSavingExpense}
-                      style={{ padding: '4px 12px', fontSize: '0.75rem', backgroundColor: 'var(--primary)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer' }}
+                      style={{ padding: '8px 20px', fontSize: '0.85rem', backgroundColor: 'var(--primary)', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}
                     >
-                      {isSavingExpense ? '...' : 'Guardar'}
+                      {isSavingExpense ? 'Guardando...' : 'Confirmar Gasto'}
                     </button>
                   </div>
                 </div>
@@ -921,9 +996,19 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
             <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '10px' }}>Últimos 5 Gastos:</div>
               {project.expenses.slice(0, 5).map((exp: any) => (
-                <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>{exp.description}</span>
-                  <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>$ {Number(exp.amount).toFixed(2)}</span>
+                <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    {exp.receiptUrl && (
+                      <div 
+                        style={{ width: '28px', height: '28px', borderRadius: '4px', overflow: 'hidden', cursor: 'pointer', border: '1px solid var(--border-color)', flexShrink: 0 }}
+                        onClick={() => window.open(exp.receiptUrl, '_blank')}
+                      >
+                        <img src={exp.receiptUrl} alt="Recibo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    )}
+                    <span style={{ color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', fontSize: '0.85rem' }}>{exp.description}</span>
+                  </div>
+                  <span style={{ color: 'var(--warning)', fontWeight: 'bold', fontSize: '0.85rem' }}>$ {Number(exp.amount).toFixed(2)}</span>
                 </div>
               ))}
             </div>

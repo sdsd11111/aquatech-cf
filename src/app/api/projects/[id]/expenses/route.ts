@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { NextResponse } from 'next/server'
+import { uploadToBunny } from '@/lib/bunny'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -9,10 +10,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const session = await getServerSession(authOptions)
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       
-    const { amount, description, date, createdAt, lat, lng } = await req.json()
+    const { amount, description, date, createdAt, lat, lng, receiptPhoto } = await req.json()
     const projectId = Number(id)
     const userId = Number(session.user.id)
     const expenseDate = new Date(date || createdAt || new Date())
+
+    let receiptUrl = null
+    if (receiptPhoto && typeof receiptPhoto === 'string' && receiptPhoto.startsWith('data:image')) {
+      try {
+        const base64Data = receiptPhoto.split(',')[1]
+        const buffer = Buffer.from(base64Data, 'base64')
+        const filename = `expense_${Date.now()}.jpg`
+        const folder = `projects/${id}/expenses`
+        receiptUrl = await uploadToBunny(buffer, filename, folder)
+      } catch (uploadError) {
+        console.error('Failed to upload expense receipt to Bunny:', uploadError)
+      }
+    }
 
     const expense = await prisma.expense.create({
       data: {
@@ -24,6 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         lat: lat ? Number(lat) : null,
         lng: lng ? Number(lng) : null,
         createdAt: createdAt ? new Date(createdAt) : undefined,
+        receiptUrl
       }
     })
 

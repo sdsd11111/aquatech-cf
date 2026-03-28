@@ -1,10 +1,27 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { db } from '@/lib/db'
 
 export default function GlobalSyncWorker() {
+  const { data: session } = useSession()
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
+
+  // Cache session info for offline role detection
+  useEffect(() => {
+    if (session?.user?.id && navigator.onLine) {
+      const u = session.user
+      db.auth.put({
+        id: 'last_session',
+        userId: u.id,
+        name: u.name || '',
+        role: (u.role as any) || 'OPERATOR',
+        username: (u as any).username || '',
+        lastLogin: Date.now()
+      }).catch(console.error)
+    }
+  }, [session])
 
   const syncOutbox = async () => {
     if (!navigator.onLine) return

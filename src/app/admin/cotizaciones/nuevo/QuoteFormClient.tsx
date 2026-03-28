@@ -193,7 +193,7 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
        try {
           const { db } = await import('@/lib/db')
           const tempId = Date.now()
-          await db.outbox.add({
+          const actualId = await db.outbox.add({
              type: 'QUOTE',
              projectId: prefetchedProject?.id || 0,
              payload,
@@ -211,8 +211,8 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
           }
 
           alert("Cotización guardada sin conexión. Se sincronizará en segundo plano cuando regreses a un área con cobertura.")
-          // Redirect to the offline preview
-          router.push(`/admin/cotizaciones/offline?id=${tempId}`)
+          // Redirect to the offline preview using the actual database ID
+          router.push(`/admin/cotizaciones/offline?id=${actualId}`)
        } catch (error) {
           alert("Error crítico accediendo a la base de datos local.")
        } finally { setLoading(false) }

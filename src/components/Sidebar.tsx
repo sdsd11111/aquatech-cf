@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { signOut, useSession } from 'next-auth/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type NavItem = {
   label: string
@@ -89,26 +89,6 @@ const adminNavItems: NavSection[] = [
   },
 ]
 
-const operatorNavItems: NavSection[] = [
-  {
-    section: 'Workspace',
-    items: [
-      {
-        label: 'Mis Proyectos',
-        href: '/admin/operador',
-        icon: (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" />
-            <rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
-        ),
-      },
-    ],
-  },
-]
-
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session, status } = useSession()
@@ -118,8 +98,19 @@ export default function Sidebar() {
     'Mis Proyectos': true,
     'Proyecto Actual': true,
   })
+  const [offlineUser, setOfflineUser] = useState<any>(null)
+  
+  useEffect(() => {
+    if (status === 'unauthenticated' || (!session && status !== 'loading')) {
+      import('@/lib/db').then(({ db }) => {
+        db.auth.get('last_session').then(u => {
+          if (u) setOfflineUser(u)
+        })
+      }).catch(() => {})
+    }
+  }, [session, status])
 
-  if (status === 'loading') {
+  if (status === 'loading' && !offlineUser) {
     return (
       <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
         <div className="sidebar-brand">
@@ -131,7 +122,10 @@ export default function Sidebar() {
     )
   }
 
-  const isAdmin = session?.user?.role === 'ADMIN' || session?.user?.role === 'ADMINISTRADORA'
+  const effectiveRole = session?.user?.role || offlineUser?.role || 'OPERATOR'
+  const effectiveName = session?.user?.name || offlineUser?.name || 'Usuario'
+  const isAdmin = effectiveRole === 'ADMIN' || effectiveRole === 'ADMINISTRADORA'
+
   const projectIdMatch = pathname.match(/\/admin\/operador\/proyecto\/(\d+)/)
   const projectId = projectIdMatch ? projectIdMatch[1] : null
 
@@ -210,12 +204,12 @@ export default function Sidebar() {
 
   const isActive = (href: string) => {
     if (href === '/admin') return pathname === '/admin'
-    return pathname === href
+    return pathname === href || pathname.startsWith(href + '/')
   }
 
   const isParentActive = (item: NavItem) => {
-    if (pathname === item.href) return true
-    if (item.subItems?.some(sub => pathname === sub.href)) return true
+    if (pathname === item.href || pathname.startsWith(item.href + '/')) return true
+    if (item.subItems?.some(sub => pathname === sub.href || pathname.startsWith(sub.href + '/'))) return true
     return false
   }
 
@@ -224,9 +218,9 @@ export default function Sidebar() {
     setOpenMenus(prev => ({ ...prev, [label]: !prev[label] }))
   }
 
-  const userInitials = session?.user?.name
+  const userInitials = effectiveName
     ?.split(' ')
-    .map((n) => n[0])
+    .map((n: any) => n[0])
     .join('')
     .slice(0, 2)
     .toUpperCase() || 'AD'
@@ -323,10 +317,10 @@ export default function Sidebar() {
           <div className="sidebar-user" onClick={() => signOut({ callbackUrl: '/admin/login' })}>
             <div className="sidebar-avatar">{userInitials}</div>
             <div className="sidebar-user-info">
-              <div className="sidebar-user-name">{session?.user?.name || 'Admin'}</div>
+              <div className="sidebar-user-name">{effectiveName}</div>
               <div className="sidebar-user-role">
-                {session?.user?.role === 'ADMIN' ? 'Administrador' : 
-                 session?.user?.role === 'ADMINISTRADORA' ? 'Administradora' : 'Operador'}
+                {effectiveRole === 'ADMIN' ? 'Administrador' : 
+                 effectiveRole === 'ADMINISTRADORA' ? 'Administradora' : 'Operador'}
               </div>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -351,6 +345,7 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`mobile-nav-item ${isActive(item.href) ? 'active' : ''}`}
               >
                 {item.icon}
@@ -372,6 +367,7 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 className={`mobile-nav-item ${isActive(item.href) ? 'active' : ''}`}
               >
                 {item.icon}

@@ -127,6 +127,7 @@ export default function OperatorProjectClient({
   const [expenseForm, setExpenseForm] = useState(false)
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
+  const [expensePhoto, setExpensePhoto] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [isSmallScreen, setIsSmallScreen] = useState(false)
   const [chatFilter, setChatFilter] = useState<'all' | 'media' | 'notes' | 'text'>('all')
@@ -264,6 +265,38 @@ export default function OperatorProjectClient({
     }
   }
 
+  const compressImage = (base64: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.src = base64
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const MAX_WIDTH = 1000
+        const MAX_HEIGHT = 1000
+        let width = img.width
+        let height = img.height
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width
+            width = MAX_WIDTH
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height
+            height = MAX_HEIGHT
+          }
+        }
+
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        ctx?.drawImage(img, 0, 0, width, height)
+        resolve(canvas.toDataURL('image/jpeg', 0.7))
+      }
+    })
+  }
+
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -282,7 +315,8 @@ export default function OperatorProjectClient({
       const payload = { 
         amount: Number(amount), 
         description, 
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        receiptPhoto: expensePhoto // Base64
       }
 
       if (!navigator.onLine) {
@@ -329,6 +363,7 @@ export default function OperatorProjectClient({
       setExpenseForm(false)
       setAmount('')
       setDescription('')
+      setExpensePhoto(null)
     } catch (e) {
       console.error(e)
     } finally {
@@ -1071,6 +1106,45 @@ export default function OperatorProjectClient({
                       <label className="form-label">Descripción del gasto</label>
                       <input type="text" className="form-input" value={description} onChange={e => setDescription(e.target.value)} required placeholder="Ej: Pasajes, Alimentación" />
                     </div>
+                    <div className="form-group">
+                      <label className="form-label">Evidencia Fotográfica (Opcional)</label>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        {!expensePhoto ? (
+                          <label className="btn btn-ghost" style={{ flex: 1, border: '1px dashed var(--primary)', height: '80px', display: 'flex', flexDirection: 'column', gap: '5px', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <span style={{ fontSize: '0.7rem' }}>Tomar Foto</span>
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              capture="environment" 
+                              style={{ display: 'none' }} 
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0]
+                                if (file) {
+                                  const reader = new FileReader()
+                                  reader.onloadend = async () => {
+                                    const compressed = await compressImage(reader.result as string)
+                                    setExpensePhoto(compressed)
+                                  }
+                                  reader.readAsDataURL(file)
+                                }
+                              }} 
+                            />
+                          </label>
+                        ) : (
+                          <div style={{ position: 'relative', width: '100%', height: '120px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                            <img src={expensePhoto} alt="Recibo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button 
+                              type="button" 
+                              style={{ position: 'absolute', top: '5px', right: '5px', backgroundColor: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer' }}
+                              onClick={() => setExpensePhoto(null)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <button type="submit" className="btn btn-primary" disabled={loading}>Guardar Gasto</button>
                   </form>
                 )}
@@ -1081,16 +1155,23 @@ export default function OperatorProjectClient({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {allExpenses.map((e: any) => (
                       <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', backgroundColor: 'var(--bg-deep)', borderRadius: '6px', borderLeft: e.isPending ? '3px solid var(--warning)' : 'none' }}>
-                        <div>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text)' }}>
-                            {e.description}
-                            {e.isPending && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
-                          </span>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            {e.isPending ? 'Pendiente de sincronizar' : (mounted ? new Date(e.date).toLocaleDateString() : '')}
-                          </span>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                          {(e.receiptUrl || e.receiptPhoto) && (
+                            <div style={{ width: '36px', height: '36px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)', flexShrink: 0, cursor: 'pointer' }} onClick={() => window.open(e.receiptUrl || e.receiptPhoto, '_blank')}>
+                              <img src={e.receiptUrl || e.receiptPhoto} alt="Recibo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text)' }}>
+                              {e.description}
+                              {e.isPending && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
+                            </span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              {e.isPending ? 'Pendiente de sincronizar' : (mounted ? new Date(e.date).toLocaleDateString() : '')}
+                            </span>
+                          </div>
                         </div>
-                        <span style={{ fontWeight: 'bold', color: e.isPending ? 'var(--warning)' : 'var(--text)' }}>$ {e.amount.toFixed(2)}</span>
+                        <span style={{ fontWeight: 'bold', color: e.isPending ? 'var(--warning)' : 'var(--text)' }}>$ {Number(e.amount).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
