@@ -27,9 +27,8 @@ export async function GET(request: Request) {
 
     const results: string[] = [];
 
-    // --- 1. RESUMEN DIARIO (Solo entre las 6:00 AM y las 6:10 AM + PRUEBA 11:05 AM) ---
-    // Ajustado a las 11:05 AM para la prueba solicitada
-    if ((currentHour === 6 && currentMinute <= 10) || (currentHour === 11 && currentMinute >= 5 && currentMinute <= 15)) {
+    // --- 1. RESUMEN DIARIO (Solo entre las 6:00 AM y las 6:10 AM) ---
+    if (currentHour === 6 && currentMinute <= 10) {
       // Calculamos el inicio y fin del día en Ecuador convertido a UTC real para Prisma
       // 00:00 Ecuador = 05:00 UTC
       const todayStart = new Date(localTime);
@@ -61,7 +60,7 @@ export async function GET(request: Request) {
         if (op.phone && op.appointments.length > 0) {
           console.log(`Enviando resumen a ${op.name} (${op.phone}) - Citas: ${op.appointments.length}`);
           
-          let summary = `*Resumen del Día - Aquatech*\n\nHola ${op.name}, hoy tienes *${op.appointments.length}* tareas asignadas:\n\n`;
+          let summary = `💧 *Resumen del Día - Aquatech* 💧\n\nHola *${op.name}*, hoy tienes *${op.appointments.length}* tareas asignadas para tu jornada:\n\n`;
           
           op.appointments.forEach((apt, idx) => {
             const time = new Date(apt.startTime).toLocaleTimeString('es-EC', { 
@@ -70,10 +69,10 @@ export async function GET(request: Request) {
               hour12: true,
               timeZone: 'America/Guayaquil'
             });
-            summary += `${idx + 1}. *${apt.title}* a las ${time}\n`;
+            summary += `✅ ${idx + 1}. *${apt.title}*\n   🕒 Hora: ${time}\n\n`;
           });
 
-          summary += `\n¡Que tengas un excelente día de trabajo!`;
+          summary += `🚀 *¡Que tengas un excelente y productivo día de trabajo!*`;
           
           const waResult = await sendWhatsAppMessage(op.phone, summary);
           if (waResult.success) {
