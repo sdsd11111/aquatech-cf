@@ -27,9 +27,9 @@ export async function GET(request: Request) {
 
     const results: string[] = [];
 
-    // --- 1. RESUMEN DIARIO (Solo entre las 6:00 AM y las 6:05 AM) ---
-    // Ventana corta de 5 minutos para asegurar un solo envío si el cron corre cada 5-10 min
-    if (currentHour === 6 && currentMinute <= 5) {
+    // --- 1. RESUMEN DIARIO (Solo entre las 6:00 AM y las 6:02 AM) ---
+    // Ventana estrecha de 2 minutos para asegurar un solo envío si el cron corre cada 5 min
+    if (currentHour === 6 && currentMinute <= 2) {
       // Calculamos el inicio y fin del día en Ecuador convertido a UTC real para Prisma
       // 00:00 Ecuador = 05:00 UTC
       const todayStart = new Date(localTime);
