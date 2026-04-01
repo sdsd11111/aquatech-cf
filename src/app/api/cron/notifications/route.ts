@@ -27,8 +27,8 @@ export async function GET(request: Request) {
 
     const results: string[] = [];
 
-    // --- 1. RESUMEN DIARIO (Solo entre las 6:00 AM y las 6:10 AM + PRUEBA 10:20 AM) ---
-    if ((currentHour === 6 && currentMinute <= 10) || (currentHour === 10 && currentMinute >= 20 && currentMinute <= 30)) {
+    // --- 1. RESUMEN DIARIO (Solo entre las 6:00 AM y las 6:10 AM + PRUEBA 10:30 AM) ---
+    if ((currentHour === 6 && currentMinute <= 10) || (currentHour === 10 && currentMinute >= 30 && currentMinute <= 45)) {
       const todayStart = new Date(localTime);
       todayStart.setHours(0, 0, 0, 0);
       const todayEnd = new Date(localTime);
