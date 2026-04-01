@@ -2,27 +2,41 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import MediaCapture from '@/components/MediaCapture'
 
-export default function QuoteFormClient({ clients, materials, prefetchedProject }: any) {
+export default function QuoteFormClient({ clients, materials, prefetchedProject, initialQuote }: any) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [selectedClientId, setSelectedClientId] = useState(prefetchedProject?.clientId || '')
-  
-  // Client Snapshot Fields
   const [clientData, setClientData] = useState({
-    name: '',
-    ruc: '',
-    address: '',
-    phone: '',
-    attention: ''
+    name: initialQuote?.clientName || '',
+    ruc: initialQuote?.clientRuc || '',
+    address: initialQuote?.clientAddress || '',
+    phone: initialQuote?.clientPhone || '',
+    attention: initialQuote?.clientAttention || ''
   })
 
-  const [notes, setNotes] = useState('')
-  const [validUntil, setValidUntil] = useState('')
-  const [items, setItems] = useState<any[]>(prefetchedProject?.items || [])
+  const [notes, setNotes] = useState(initialQuote?.notes || '')
+  
+  // Format target date for <input type="date">
+  const initialDate = initialQuote?.validUntil ? new Date(initialQuote.validUntil).toISOString().split('T')[0] : '';
+  const [validUntil, setValidUntil] = useState(initialDate)
+  
+  const [items, setItems] = useState<any[]>(initialQuote?.items || prefetchedProject?.items || [])
   const [searchTerm, setSearchTerm] = useState('')
   const [showAllInventory, setShowAllInventory] = useState(false)
-  const [isNewClient, setIsNewClient] = useState(false)
+  
+  const getInitialMode = () => {
+    if (initialQuote?.clientName === 'CONSUMIDOR FINAL') return 'CF';
+    if (initialQuote?.clientId) return 'EXISTING';
+    if (initialQuote) return 'NEW';
+    return 'NEW';
+  }
+
+  const [clientMode, setClientMode] = useState<'EXISTING' | 'NEW' | 'CF'>(
+    initialQuote ? getInitialMode() : (prefetchedProject?.clientId ? 'EXISTING' : 'NEW')
+  )
+  const [selectedClientId, setSelectedClientId] = useState(initialQuote?.clientId || prefetchedProject?.clientId || '')
+  const [isFirstRender, setIsFirstRender] = useState(true)
   
   // Global Item States
   const [globalDescription, setGlobalDescription] = useState('')
@@ -31,7 +45,31 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
 
   // Auto-fill client data when selection changes
   useEffect(() => {
-    if (selectedClientId && !isNewClient) {
+    // Skip auto-fill on first render if we are editing an existing quote
+    if (isFirstRender && initialQuote) {
+      setIsFirstRender(false)
+      return
+    }
+
+    if (clientMode === 'CF') {
+      setSelectedClientId('')
+      setClientData({
+        name: 'CONSUMIDOR FINAL',
+        ruc: '0000000000000',
+        address: '000',
+        phone: '000',
+        attention: '000'
+      })
+    } else if (clientMode === 'NEW') {
+      setSelectedClientId('')
+      setClientData({
+        name: '',
+        ruc: '',
+        address: '',
+        phone: '',
+        attention: ''
+      })
+    } else if (selectedClientId && clientMode === 'EXISTING') {
       const client = clients.find((c: any) => c.id === Number(selectedClientId))
       if (client) {
         setClientData({
@@ -42,18 +80,10 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
           attention: ''
         })
       }
-    } else if (isNewClient) {
-      // Clear data for new client
-      setSelectedClientId('')
-      setClientData({
-        name: '',
-        ruc: '',
-        address: '',
-        phone: '',
-        attention: ''
-      })
     }
-  }, [selectedClientId, clients, isNewClient])
+    
+    if (isFirstRender) setIsFirstRender(false)
+  }, [clientMode, selectedClientId, clients, initialQuote, isFirstRender])
 
   // Financial Calculations
   const calculations = useMemo(() => {
@@ -146,13 +176,13 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
     const term = searchTerm.toLowerCase()
     
     if (showAllInventory && !searchTerm) {
-      return materials.slice(0, 50)
+      return materials.slice(0, 100)
     }
 
     return (materials || []).filter((m: any) => 
       m.name.toLowerCase().includes(term) || 
       (m.code && m.code.toLowerCase().includes(term))
-    ).slice(0, 15)
+    ).slice(0, 50)
   }, [searchTerm, materials, showAllInventory])
 
   const updateItem = (index: number, field: string, value: any) => {
@@ -167,8 +197,8 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!isNewClient && !selectedClientId) return alert("Selecciona un cliente o elija 'Cliente Nuevo'")
-    if (isNewClient && !clientData.name) return alert("Ingrese el nombre del nuevo cliente")
+    if (clientMode === 'EXISTING' && !selectedClientId) return alert("Selecciona un cliente existente")
+    if ((clientMode === 'NEW' || clientMode === 'CF') && !clientData.name) return alert("Ingrese el nombre del cliente")
     if (items.length === 0) return alert("Agrega al menos un item")
 
     const payload = {
@@ -220,15 +250,19 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
     }
 
     try {
-      const res = await fetch('/api/quotes', {
-        method: 'POST',
+      const isEditing = !!initialQuote?.id;
+      const url = isEditing ? `/api/quotes/${initialQuote.id}` : '/api/quotes';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
 
       if (res.ok) {
         const data = await res.json()
-        router.push(`/admin/cotizaciones/compuesto/${data.id}`)
+        router.push(`/admin/cotizaciones/compuesto/${isEditing ? initialQuote.id : data.id}`)
         router.refresh()
       } else {
         alert("Error al guardar en el servidor.")
@@ -252,20 +286,20 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
               Información del Cliente
             </h3>
             
-            {/* Toggle Nuevo/Existente */}
-            <div style={{ display: 'flex', backgroundColor: 'var(--bg-deep)', borderRadius: '30px', padding: '4px', border: '1px solid var(--border-color)' }}>
+            {/* Toggle Nuevo/Existente/CF */}
+            <div style={{ display: 'flex', backgroundColor: 'var(--bg-deep)', borderRadius: '30px', padding: '4px', border: '1px solid var(--border-color)', gap: '4px' }}>
               <button 
                 type="button" 
-                onClick={() => setIsNewClient(false)}
+                onClick={() => setClientMode('EXISTING')}
                 style={{ 
-                  padding: '6px 16px', 
+                  padding: '6px 14px', 
                   borderRadius: '25px', 
-                  fontSize: '0.8rem', 
+                  fontSize: '0.75rem', 
                   fontWeight: 'bold',
                   border: 'none',
                   cursor: 'pointer',
-                  backgroundColor: !isNewClient ? 'var(--primary)' : 'transparent',
-                  color: !isNewClient ? 'white' : 'var(--text-muted)',
+                  backgroundColor: clientMode === 'EXISTING' ? 'var(--primary)' : 'transparent',
+                  color: clientMode === 'EXISTING' ? 'white' : 'var(--text-muted)',
                   transition: 'all 0.2s'
                 }}
               >
@@ -273,33 +307,50 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
               </button>
               <button 
                 type="button" 
-                onClick={() => setIsNewClient(true)}
+                onClick={() => setClientMode('NEW')}
                 style={{ 
-                  padding: '6px 16px', 
+                  padding: '6px 14px', 
                   borderRadius: '25px', 
-                  fontSize: '0.8rem', 
+                  fontSize: '0.75rem', 
                   fontWeight: 'bold',
                   border: 'none',
                   cursor: 'pointer',
-                  backgroundColor: isNewClient ? 'var(--primary)' : 'transparent',
-                  color: isNewClient ? 'white' : 'var(--text-muted)',
+                  backgroundColor: clientMode === 'NEW' ? 'var(--primary)' : 'transparent',
+                  color: clientMode === 'NEW' ? 'white' : 'var(--text-muted)',
                   transition: 'all 0.2s'
                 }}
               >
                 Nuevo
               </button>
+              <button 
+                type="button" 
+                onClick={() => setClientMode('CF')}
+                style={{ 
+                  padding: '6px 14px', 
+                  borderRadius: '25px', 
+                  fontSize: '0.75rem', 
+                  fontWeight: 'bold',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: clientMode === 'CF' ? 'var(--secondary)' : 'transparent',
+                  color: clientMode === 'CF' ? 'white' : 'var(--text-muted)',
+                  transition: 'all 0.2s'
+                }}
+              >
+                CF
+              </button>
             </div>
           </div>
 
           <div className="quote-client-fields">
-            {!isNewClient ? (
+            {clientMode === 'EXISTING' ? (
               <div className="form-group">
                 <label>Seleccionar Cliente Existente</label>
                 <select 
                   className="form-input" 
                   value={selectedClientId} 
                   onChange={e => setSelectedClientId(e.target.value)} 
-                  required={!isNewClient}
+                  required={clientMode === 'EXISTING'}
                 >
                   <option value="">-- Selecciona --</option>
                   {clients.map((c: any) => (
@@ -309,13 +360,13 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
               </div>
             ) : (
               <div className="form-group">
-                <label>Nombre del Cliente Nuevo</label>
+                <label>Nombre del Cliente {clientMode === 'CF' ? '(CF)' : 'Nuevo'}</label>
                 <input 
                   className="form-input" 
                   value={clientData.name} 
                   onChange={e => setClientData({...clientData, name: e.target.value})}
-                  placeholder="Ej: Juan Pérez o Empresa S.A."
-                  required={isNewClient}
+                  placeholder={clientMode === 'CF' ? 'CONSUMIDOR FINAL' : 'Ej: Juan Pérez o Empresa S.A.'}
+                  required
                 />
               </div>
             )}
@@ -528,10 +579,28 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
         </div>
 
         <div className="card">
-          <label>Notas / Términos de Referencia</label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <label style={{ margin: 0 }}>Notas / Términos de Referencia</label>
+            <div style={{ width: '140px' }}>
+              <MediaCapture 
+                mode="audio" 
+                onCapture={(blob, type, text) => {
+                  setNotes((prev: string) => (prev ? prev + ' ' + text : text))
+                }}
+              />
+            </div>
+            <div style={{ width: '140px' }}>
+              <MediaCapture 
+                mode="video" 
+                onCapture={(blob, type, text) => {
+                  setNotes((prev: string) => (prev ? prev + ' ' + text : text))
+                }}
+              />
+            </div>
+          </div>
           <textarea 
             className="form-input" 
-            style={{ height: '80px', marginTop: '10px' }} 
+            style={{ height: '80px' }} 
             value={notes} 
             onChange={e => setNotes(e.target.value)}
             placeholder="Ej: Entrega inmediata, validez de oferta 15 días..."
@@ -586,7 +655,7 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject 
             style={{ width: '100%', marginTop: '25px', padding: '15px', fontWeight: 'bold' }}
             disabled={loading}
           >
-            {loading ? 'Generando...' : 'CREAR COTIZACIÓN'}
+            {loading ? 'Guardando...' : (initialQuote ? 'ACTUALIZAR COTIZACIÓN' : 'CREAR COTIZACIÓN')}
           </button>
           
           <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '15px' }}>

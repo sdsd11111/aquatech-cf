@@ -24,7 +24,17 @@ export const authOptions: AuthOptions = {
           where: { 
             username: usernameInput
           },
-        })
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            username: true,
+            passwordHash: true,
+            isActive: true,
+            sessionVersion: true,
+          } as any
+        }) as any
 
         if (!user) {
           console.log('Login Fallido: Usuario no encontrado');
@@ -37,7 +47,7 @@ export const authOptions: AuthOptions = {
         }
 
         console.log('Usuario encontrado, comparando password...');
-        const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
+        const isValid = await bcrypt.compare(password, user.passwordHash)
         
         if (!isValid) {
           console.log('Login Fallido: Contraseña incorrecta');
@@ -52,6 +62,7 @@ export const authOptions: AuthOptions = {
           email: user.email,
           role: user.role,
           username: user.username,
+          sessionVersion: user.sessionVersion,
         }
       },
     }),
@@ -62,15 +73,48 @@ export const authOptions: AuthOptions = {
         token.role = (user as any).role
         token.userId = (user as any).id
         token.username = (user as any).username
+        token.sessionVersion = (user as any).sessionVersion
+        token.lastChecked = Date.now()
       }
+
+      // Per-request session validation for 'Force Logout'
+      // Throttled: Check DB only every 60 seconds to avoid connection pool saturation
+      const now = Date.now()
+      const shouldCheck = !token.lastChecked || (now - (token.lastChecked as number)) > 60000
+
+      if (token.userId && shouldCheck) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: Number(token.userId) },
+            select: { sessionVersion: true, isActive: true } as any
+          }) as any
+          
+          if (dbUser) {
+            if (!dbUser.isActive || dbUser.sessionVersion !== token.sessionVersion) {
+               return { ...token, error: 'SessionRevoked' }
+            }
+            token.lastChecked = now // Update timestamp on success
+          }
+        } catch (error) {
+          console.error('[Auth JWT Check] Error in session validation (skipping this cycle):', error)
+          // On error (e.g. pool timeout), we allow the session to stay valid for another cycle
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
+      if (token.error === 'SessionRevoked') {
+        // This will force the client to sign out
+        return null as any;
+      }
+
       if (session.user) {
         const u = session.user as any
         u.role = token.role
         u.id = token.userId
         u.username = token.username
+        u.sessionVersion = token.sessionVersion
       }
       return session
     },

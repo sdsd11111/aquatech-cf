@@ -25,6 +25,7 @@ export async function GET(
         phone: true,
         role: true,
         username: true,
+        displayPassword: true,
         createdAt: true,
         isActive: true,
         projectTeams: {
@@ -65,7 +66,7 @@ export async function GET(
     // Format the response
     const formattedUser = {
       ...user,
-      projects: user.projectTeams.map(pt => ({
+      projects: user.projectTeams.map((pt: any) => ({
         ...pt.project,
         assignedAt: pt.assignedAt
       })),

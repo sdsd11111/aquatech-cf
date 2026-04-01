@@ -30,6 +30,7 @@ export default function OperatorProjectClient({
   const view = searchParams.get('view') || 'records'
   const [activeTab, setActiveTab] = useState<'records' | 'chat'>(view as 'records' | 'chat')
   const [handleDownloadLoading, setHandleDownloadLoading] = useState<string | null>(null)
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<any>(null)
 
   const handleDownload = async (url: string, filename: string) => {
     setHandleDownloadLoading(url)
@@ -992,16 +993,28 @@ export default function OperatorProjectClient({
                           }}
                         >
                           {item.mimeType.startsWith('image/') ? (
-                            <img 
-                              src={item.url} 
-                              alt={item.filename} 
-                              style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s' }} 
-                              className="group-hover:scale-110"
-                            />
+                            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                              <img 
+                                src={item.url} 
+                                alt={item.filename} 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s' }} 
+                                className="group-hover:scale-110"
+                              />
+                              {(item.filename.toLowerCase().includes('plano') || item.filename.toLowerCase().includes('diseño')) && (
+                                <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', zIndex: 11 }}>
+                                  PLANO
+                                </div>
+                              )}
+                            </div>
                           ) : (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-deep)', padding: '10px' }}>
+                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-deep)', padding: '10px', position: 'relative' }}>
                               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" style={{ opacity: 0.7 }}><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
                               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '8px', textAlign: 'center', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.filename}</span>
+                              {(item.filename.toLowerCase().includes('plano') || item.filename.toLowerCase().includes('diseño')) && (
+                                <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', zIndex: 11 }}>
+                                  PLANO
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -1019,10 +1032,8 @@ export default function OperatorProjectClient({
                             transition: 'opacity 0.2s',
                             zIndex: 10
                           }} className="group-hover:opacity-100">
-                            <a 
-                              href={item.url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
+                            <button 
+                              onClick={() => setSelectedPreviewImage(item)}
                               style={{ 
                                 padding: '8px 16px', 
                                 backgroundColor: 'var(--primary)', 
@@ -1030,15 +1041,16 @@ export default function OperatorProjectClient({
                                 borderRadius: '20px', 
                                 fontSize: '0.75rem', 
                                 fontWeight: 'bold',
-                                textDecoration: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '6px'
                               }}
                             >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                              Ver
-                            </a>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                              Visualizar
+                            </button>
                             <button 
                               onClick={() => handleDownload(item.url, item.filename)}
                               style={{ 
@@ -1473,6 +1485,46 @@ export default function OperatorProjectClient({
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {/* Lightbox / Preview Modal */}
+      {selectedPreviewImage && (
+        <div 
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} 
+          onClick={() => setSelectedPreviewImage(null)}
+        >
+          <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button 
+              style={{ position: 'absolute', top: '10px', right: '10px', background: 'white', border: 'none', borderRadius: '50%', width: '40px', height: '40px', fontSize: '1.2rem', cursor: 'pointer', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+              onClick={(e) => { e.stopPropagation(); setSelectedPreviewImage(null); }}
+            >
+              ✕
+            </button>
+            
+            {selectedPreviewImage.mimeType.startsWith('image/') ? (
+              <img 
+                src={selectedPreviewImage.url} 
+                alt={selectedPreviewImage.filename} 
+                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <div 
+                style={{ backgroundColor: 'var(--bg-card)', padding: '30px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', maxWidth: '400px', width: '100%' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                <div style={{ textAlign: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{selectedPreviewImage.filename}</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{selectedPreviewImage.mimeType}</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                  <button onClick={() => window.open(selectedPreviewImage.url, '_blank')} className="btn btn-primary" style={{ width: '100%' }}>Abrir Documento</button>
+                  <button onClick={() => handleDownload(selectedPreviewImage.url, selectedPreviewImage.filename)} className="btn btn-ghost" style={{ width: '100%', border: '1px solid var(--border-color)' }}>{handleDownloadLoading === selectedPreviewImage.url ? 'Descargando...' : 'Descargar'}</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

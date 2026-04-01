@@ -105,7 +105,7 @@ export default function QuoteDetailClient({ quote }: any) {
                 </tr>
               </thead>
               <tbody>
-                {quote.items.map((item: any, idx: number) => (
+                {(quote.items || []).map((item: any, idx: number) => (
                   <tr key={item.id || idx} style={{ borderBottom: '1px solid #eee' }}>
                     <td style={{ padding: '10px', textAlign: 'center' }}>{item.quantity}</td>
                     <td style={{ padding: '10px' }}>

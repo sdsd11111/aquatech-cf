@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ProjectUploader, { ProjectFile } from '@/components/ProjectUploader'
+import MediaCapture from '@/components/MediaCapture'
 import { generateProfessionalPDF } from '@/lib/pdf-generator'
 
 export default function NuevoProyectoPage() {
@@ -154,24 +155,12 @@ export default function NuevoProyectoPage() {
         return setError('Selecciona al menos una categoría y un tipo de contrato.')
     }
     
-    // Step 2 validation - REAL DATA REQUIRED
-    if (step === 2) {
-      if (!clientData.name || clientData.name.trim().length < 3) return setError('El nombre del cliente debe ser real (mínimo 3 caracteres).')
-      
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!clientData.email || !emailRegex.test(clientData.email)) {
-        return setError('Por favor, ingresa un correo electrónico válido y real.')
+      // Step 2 validation - FLEXIBLE
+      if (step === 2) {
+        if (!clientData.name || clientData.name.trim().length < 3) {
+          return setError('El nombre del cliente debe ser real (mínimo 3 caracteres).')
+        }
       }
-
-      const phoneRegex = /^\+?[\d\s-]{7,15}$/
-      if (!clientData.phone || !phoneRegex.test(clientData.phone)) {
-        return setError('Por favor, ingresa un número de teléfono válido (mínimo 7 dígitos).')
-      }
-
-      if (!clientData.address || clientData.address.trim().length < 5) {
-        return setError('La dirección física es obligatoria para la legalidad de la cotización.')
-      }
-    }
     
     // Step 3 validation - Audio/Transcription
     if (step === 3 && !projectData.technicalSpecs.description) {
@@ -575,14 +564,37 @@ export default function NuevoProyectoPage() {
             <div className="animate-fade-in">
               <h3 style={{ marginBottom: '20px', color: 'var(--text)' }}>Información del Cliente</h3>
               
-              <div style={inputGroupStyle}>
-                <label style={labelStyle}>¿Cliente Existente o Nuevo?</label>
-                <select className="form-input" onChange={selectExistingClient} defaultValue={isNewClient ? 'NEW' : ''}>
-                  <option value="NEW">+ Añadir Nuevo Cliente</option>
-                  {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+              <div style={{ ...inputGroupStyle, display: 'flex', gap: '15px', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>¿Cliente Existente o Nuevo?</label>
+                  <select className="form-input" onChange={selectExistingClient} defaultValue={isNewClient ? 'NEW' : ''}>
+                    <option value="NEW">+ Añadir Nuevo Cliente</option>
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 20px', fontWeight: 'bold' }}
+                  onClick={() => {
+                    setIsNewClient(true)
+                    setClientData({
+                      id: null,
+                      name: 'CONSUMIDOR FINAL',
+                      ruc: '9999999999999',
+                      phone: '0000000000',
+                      email: 'ventas@aquatech.com',
+                      city: 'LOJA',
+                      address: 'S/N',
+                      notes: 'Venta rápida / CF'
+                    })
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                  Opción CF
+                </button>
               </div>
 
               <div style={{ padding: '20px', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'var(--bg-deep)' }}>
@@ -630,52 +642,51 @@ export default function NuevoProyectoPage() {
             <div className="animate-fade-in">
               <h3 style={{ marginBottom: '10px', color: 'var(--text)' }}>Especificaciones Técnicas</h3>
               
-              {/* Audio Spec Section */}
-              <div className="card mb-6" style={{ border: '1px solid var(--primary-glow)', background: 'linear-gradient(135deg, var(--bg-card), var(--bg-deep))' }}>
-                <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                  <div style={{ 
-                    width: '60px', 
-                    height: '60px', 
-                    borderRadius: '16px', 
-                    background: 'var(--primary-glow)', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    color: 'var(--primary)',
-                    flexShrink: 0
-                  }}>
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              {/* Audio/Video Spec Section */}
+              <div className="mb-8">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                  <div className="card-shadow-hover" style={{ backgroundColor: 'var(--bg-surface)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                      Instrucciones por Voz
+                    </h4>
+                    <MediaCapture 
+                      mode="audio" 
+                      onCapture={(blob, type, text) => {
+                        setProjectData(prev => ({
+                          ...prev,
+                          technicalSpecs: { ...prev.technicalSpecs, description: (prev.technicalSpecs.description || '') + ' ' + text }
+                        }))
+                      }}
+                    />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ margin: 0 }}>Especificación por Audio</h4>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Sube o graba un audio explicando los detalles para generar la sugerencia de presupuesto.</p>
+                  
+                  <div className="card-shadow-hover" style={{ backgroundColor: 'var(--bg-surface)', padding: '20px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+                    <h4 style={{ margin: '0 0 15px 0', fontSize: '1.2rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>
+                      Grabación de Video (Especif.)
+                    </h4>
+                    <MediaCapture 
+                      mode="video" 
+                      onCapture={async (blob, type, text) => {
+                        setProjectData(prev => ({
+                          ...prev,
+                          technicalSpecs: { ...prev.technicalSpecs, description: (prev.technicalSpecs.description || '') + ' ' + text }
+                        }))
+                        
+                        // Upload video to gallery
+                        const formData = new FormData()
+                        formData.append('file', blob, 'especificacion_tecnica.webm')
+                        try {
+                          const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                          if (res.ok) {
+                            const data = await res.json()
+                            setUploadedFiles(prev => [...prev, data])
+                          }
+                        } catch (err) { console.error('Video upload failed', err) }
+                      }}
+                    />
                   </div>
-                  <input 
-                    type="file" 
-                    accept="audio/*" 
-                    id="audio-upload" 
-                    style={{ display: 'none' }} 
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) {
-                        // In a real app, upload here. For now, simulate suggestion.
-                        const file = e.target.files[0];
-                        setError('Audio cargado: ' + file.name + '. Generando sugerencia...');
-                        setTimeout(() => {
-                          setProjectData(prev => ({
-                            ...prev,
-                            technicalSpecs: {
-                              ...prev.technicalSpecs,
-                              description: 'PISCINA DE 10X5M CON HIDROMASAJE INTEGRADO. BASTANTE VARILLA DE 12MM. ACABADO DIAMOND BRITE AZUL.'
-                            }
-                          }));
-                          setError('');
-                        }, 1500);
-                      }
-                    }}
-                  />
-                  <label htmlFor="audio-upload" className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                    Subir Audio
-                  </label>
                 </div>
               </div>
 
@@ -714,7 +725,17 @@ export default function NuevoProyectoPage() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <input type="text" className="form-input mb-3" placeholder="Título de Fase (Ej. Excavación y Drenaje)" value={phase.title} onChange={e => updatePhase(index, 'title', e.target.value)} />
-                    <textarea className="form-input mb-3" rows={2} placeholder="Descripción teórica de los trabajos a realizar..." value={phase.description} onChange={e => updatePhase(index, 'description', e.target.value)} />
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }} className="mb-3">
+                        <textarea className="form-input" rows={2} placeholder="Descripción teórica de los trabajos a realizar..." value={phase.description} onChange={e => updatePhase(index, 'description', e.target.value)} />
+                        <div style={{ width: '120px', flexShrink: 0 }}>
+                            <MediaCapture 
+                                mode="audio" 
+                                onCapture={(blob, type, text) => {
+                                    updatePhase(index, 'description', (phase.description || '') + ' ' + text)
+                                }}
+                            />
+                        </div>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Días estimados para esta fase:</label>
                         <input 

@@ -29,6 +29,158 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
   const [expensePhoto, setExpensePhoto] = useState<string | null>(null)
   const [isSavingExpense, setIsSavingExpense] = useState(false)
   const [isFichaOpen, setIsFichaOpen] = useState(false)
+  const [isEditingFicha, setIsEditingFicha] = useState(false)
+  const [isSavingFicha, setIsSavingFicha] = useState(false)
+  const [editingItemId, setEditingItemId] = useState<number | null>(null)
+  const [editingFilename, setEditingFilename] = useState('')
+  const [isEditingPhases, setIsEditingPhases] = useState(false)
+  const [editingPhases, setEditingPhases] = useState<any[]>([])
+  const [isSavingPhases, setIsSavingPhases] = useState(false)
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<any>(null)
+  
+  // Project Deletion States
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteStep, setDeleteStep] = useState(1)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Form State for Ficha
+  const [editTitle, setEditTitle] = useState(project.title)
+  const [editType, setEditType] = useState(project.type)
+  const [editSubtype, setEditSubtype] = useState(project.subtype || '')
+  const [editCity, setEditCity] = useState(project.city || '')
+  const [editAddress, setEditAddress] = useState(project.address || '')
+  const [editStartDate, setEditStartDate] = useState(project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '')
+  const [editEndDate, setEditEndDate] = useState(project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '')
+  const [editCategoryList, setEditCategoryList] = useState<string[]>(() => {
+    try { return JSON.parse(project.categoryList || '[]') } catch { return [] }
+  })
+  const [editContractTypeList, setEditContractTypeList] = useState<string[]>(() => {
+    try { return JSON.parse(project.contractTypeList || '[]') } catch { return [] }
+  })
+  const [editSpecsTranscription, setEditSpecsTranscription] = useState(project.specsTranscription || '')
+  const [editTechnicalSpecs, setEditTechnicalSpecs] = useState(() => {
+    try { 
+      const parsed = JSON.parse(project.technicalSpecs || '{}')
+      return parsed.description || ''
+    } catch { return '' }
+  })
+
+  // Client Form State
+  const [editClientName, setEditClientName] = useState(project.client?.name || '')
+  const [editClientRuc, setEditClientRuc] = useState(project.client?.ruc || '')
+  const [editClientPhone, setEditClientPhone] = useState(project.client?.phone || '')
+  const [editClientEmail, setEditClientEmail] = useState(project.client?.email || '')
+  const [editClientCity, setEditClientCity] = useState(project.client?.city || '')
+  const [editClientAddress, setEditClientAddress] = useState(project.client?.address || '')
+
+  const CATEGORIES = [
+    { id: 'PISCINA', label: 'Piscina' },
+    { id: 'JACUZZI', label: 'Jacuzzi' },
+    { id: 'BOMBAS', label: 'Sistema de Bombeo' },
+    { id: 'TRATAMIENTO', label: 'Tratamiento de Agua' },
+    { id: 'RIEGO', label: 'Sistema de Riego' },
+    { id: 'CALENTAMIENTO', label: 'Calentamiento' },
+    { id: 'CONTRA_INCENDIOS', label: 'Contra Incendios' },
+    { id: 'MANTENIMIENTO', label: 'Mantenimiento General' },
+    { id: 'OTRO', label: 'Otros' }
+  ]
+
+  const CONTRACT_TYPES = [
+    { id: 'INSTALLATION', label: 'Instalación Nueva' },
+    { id: 'MAINTENANCE', label: 'Mantenimiento' },
+    { id: 'REPAIR', label: 'Reparación' },
+    { id: 'OTHER', label: 'Otro' }
+  ]
+
+  const handleDeleteGalleryItem = async (itemId: number) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar este archivo de la galería?')) return
+    
+    try {
+      const resp = await fetch(`/api/projects/${project.id}/gallery/${itemId}`, {
+        method: 'DELETE'
+      })
+      if (resp.ok) {
+        router.refresh()
+      } else {
+        alert('Error al eliminar el archivo')
+      }
+    } catch (error) {
+      console.error('Error deleting gallery item:', error)
+      alert('Error de conexión al eliminar')
+    }
+  }
+
+  const handleSaveFicha = async () => {
+    setIsSavingFicha(true)
+    try {
+      const resp = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle,
+          type: editType,
+          subtype: editSubtype,
+          city: editCity,
+          address: editAddress,
+          startDate: editStartDate,
+          endDate: editEndDate,
+          categoryList: JSON.stringify(editCategoryList),
+          contractTypeList: JSON.stringify(editContractTypeList),
+          technicalSpecs: JSON.stringify({ description: editTechnicalSpecs }),
+          specsTranscription: editSpecsTranscription,
+          client: {
+            name: editClientName,
+            ruc: editClientRuc,
+            phone: editClientPhone,
+            email: editClientEmail,
+            city: editClientCity,
+            address: editClientAddress
+          }
+        })
+      })
+
+      if (resp.ok) {
+        setIsEditingFicha(false)
+        router.refresh()
+      } else {
+        alert('Error al guardar los cambios')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Error de conexión')
+    } finally {
+      setIsSavingFicha(false)
+    }
+  }
+
+  const handleDeleteProject = async () => {
+    if (deleteConfirmText !== project.title) {
+      alert('El nombre del proyecto no coincide.')
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const resp = await fetch(`/api/projects/${project.id}`, {
+        method: 'DELETE'
+      })
+
+      if (resp.ok) {
+        router.push('/admin/proyectos')
+        router.refresh()
+      } else {
+        const data = await resp.json()
+        alert(`Error: ${data.error || 'No se pudo eliminar el proyecto'}`)
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error)
+      alert('Error de conexión al eliminar el proyecto')
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteModal(false)
+    }
+  }
 
   const compressImage = (base64: string): Promise<string> => {
     return new Promise((resolve) => {
@@ -142,6 +294,49 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
       }
     } catch (e) {
       console.error('Error deleting from gallery:', e)
+    }
+  }
+
+  const handleRenameGalleryItem = async (itemId: number) => {
+    if (!editingFilename.trim()) return
+    try {
+      const resp = await fetch(`/api/projects/${project.id}/gallery/${itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: editingFilename })
+      })
+      if (resp.ok) {
+        const updated = await resp.json()
+        setGallery((prev: any[]) => prev.map(item => item.id === itemId ? updated : item))
+        setEditingItemId(null)
+      }
+    } catch (e) {
+      console.error('Error renaming gallery item:', e)
+    }
+  }
+
+  const handleSavePhases = async () => {
+    setIsSavingPhases(true)
+    try {
+      for (const phase of editingPhases) {
+        const resp = await fetch(`/api/projects/${project.id}/phases/${phase.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: phase.title,
+            description: phase.description,
+            estimatedDays: phase.estimatedDays,
+            status: phase.status
+          })
+        })
+        if (!resp.ok) console.error(`Error updating phase ${phase.id}`)
+      }
+      setIsEditingPhases(false)
+      router.refresh()
+    } catch (e) {
+      console.error('Error saving phases:', e)
+    } finally {
+      setIsSavingPhases(false)
     }
   }
 
@@ -688,24 +883,55 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
             </div>
           </div>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
-            <button 
-              className="btn btn-secondary" 
-              onClick={() => handleDownload(`/api/projects/${project.id}/pdf`, `Ficha_${project.title.replace(/ /g, '_')}.pdf`)}
-              disabled={isDownloadingPdf}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem' }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg>
-              {isDownloadingPdf ? 'Generando...' : 'Descargar Ficha Técnica'}
-            </button>
-            <button 
-              className="btn btn-primary" 
-              onClick={() => handleDownload(`/api/projects/${project.id}/report`, `Reporte_${project.title.replace(/ /g, '_')}.pdf`)}
-              disabled={isGenerating}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem' }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              {isGenerating ? 'Generando...' : 'Generar Reporte de Obra'}
-            </button>
+            {!isEditingFicha ? (
+              <>
+                <button 
+                  className="btn btn-ghost" 
+                  onClick={() => setIsEditingFicha(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem', color: 'var(--primary)' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Editar Información
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => handleDownload(`/api/projects/${project.id}/pdf`, `Ficha_${project.title.replace(/ /g, '_')}.pdf`)}
+                  disabled={isDownloadingPdf}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/></svg>
+                  {isDownloadingPdf ? 'Generando...' : 'Descargar Ficha Técnica'}
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={() => handleDownload(`/api/projects/${project.id}/report`, `Reporte_${project.title.replace(/ /g, '_')}.pdf`)}
+                  disabled={isGenerating}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  {isGenerating ? 'Generando...' : 'Generar Reporte de Obra'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button 
+                  className="btn btn-ghost" 
+                  onClick={() => setIsEditingFicha(false)}
+                  disabled={isSavingFicha}
+                  style={{ padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem' }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={handleSaveFicha}
+                  disabled={isSavingFicha}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', fontSize: '0.85rem' }}
+                >
+                  {isSavingFicha ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -725,67 +951,124 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 Datos Generales
               </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Título</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem', fontWeight: '500', textAlign: 'right', maxWidth: '60%' }}>{project.title}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Tipo</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.type || 'N/A'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Ciudad</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.city || 'N/A'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Dirección</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'right', maxWidth: '60%' }}>{project.address || 'N/A'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Fecha Inicio</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{formatDate(project.startDate)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Fecha Fin (Est.)</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{formatDate(project.endDate)}</span>
-                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Título</span>
+                    {!isEditingFicha ? (
+                      <span style={{ color: 'var(--text)', fontSize: '0.9rem', fontWeight: '500', textAlign: 'right', maxWidth: '60%' }}>{project.title}</span>
+                    ) : (
+                      <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Tipo</span>
+                    {!isEditingFicha ? (
+                      <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.type || 'N/A'}</span>
+                    ) : (
+                      <select value={editType} onChange={e => setEditType(e.target.value as any)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }}>
+                        <option value="PISCINA">Piscina</option>
+                        <option value="JACUZZI">Jacuzzi</option>
+                        <option value="BOMBAS">Bombas / Sistemas</option>
+                        <option value="OTRO">Otro</option>
+                      </select>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Ciudad</span>
+                    {!isEditingFicha ? (
+                      <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.city || 'N/A'}</span>
+                    ) : (
+                      <input type="text" value={editCity} onChange={e => setEditCity(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Dirección</span>
+                    {!isEditingFicha ? (
+                      <span style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'right', maxWidth: '60%' }}>{project.address || 'N/A'}</span>
+                    ) : (
+                      <input type="text" value={editAddress} onChange={e => setEditAddress(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Fecha Inicio</span>
+                    {!isEditingFicha ? (
+                      <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{formatDate(project.startDate)}</span>
+                    ) : (
+                      <input type="date" value={editStartDate} onChange={e => setEditStartDate(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Fecha Fin (Est.)</span>
+                    {!isEditingFicha ? (
+                      <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{formatDate(project.endDate)}</span>
+                    ) : (
+                      <input type="date" value={editEndDate} onChange={e => setEditEndDate(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                    )}
+                  </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Creado por</span>
                   <span style={{ color: 'var(--primary)', fontSize: '0.9rem', fontWeight: '600' }}>{project.creator?.name || 'Admin'}</span>
                 </div>
 
                 {/* Categorías */}
-                {(() => {
-                  let cats: string[] = []
-                  try { cats = JSON.parse(project.categoryList || '[]') } catch {}
-                  return cats.length > 0 ? (
-                    <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600', marginBottom: '8px' }}>Categorías</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {cats.map((c: string, i: number) => (
+                <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600', marginBottom: '8px' }}>Categorías</div>
+                  {!isEditingFicha ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {(() => {
+                        try { return JSON.parse(project.categoryList || '[]').map((c: string, i: number) => (
                           <span key={i} style={{ padding: '4px 12px', borderRadius: '16px', fontSize: '0.8rem', backgroundColor: 'rgba(56, 189, 248, 0.1)', color: 'var(--primary)', fontWeight: '600' }}>{c}</span>
-                        ))}
-                      </div>
+                        )) } catch { return null }
+                      })()}
                     </div>
-                  ) : null
-                })()}
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {CATEGORIES.map(cat => (
+                        <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={editCategoryList.includes(cat.label)} 
+                            onChange={e => {
+                              if (e.target.checked) setEditCategoryList([...editCategoryList, cat.label])
+                              else setEditCategoryList(editCategoryList.filter(c => c !== cat.label))
+                            }}
+                          />
+                          {cat.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Tipos de Contrato */}
-                {(() => {
-                  let cts: string[] = []
-                  try { cts = JSON.parse(project.contractTypeList || '[]') } catch {}
-                  return cts.length > 0 ? (
-                    <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600', marginBottom: '8px' }}>Tipos de Contrato</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {cts.map((c: string, i: number) => (
+                <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600', marginBottom: '8px' }}>Tipos de Contrato</div>
+                  {!isEditingFicha ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {(() => {
+                        try { return JSON.parse(project.contractTypeList || '[]').map((c: string, i: number) => (
                           <span key={i} style={{ padding: '4px 12px', borderRadius: '16px', fontSize: '0.8rem', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: 'var(--success)', fontWeight: '600' }}>{c}</span>
-                        ))}
-                      </div>
+                        )) } catch { return null }
+                      })()}
                     </div>
-                  ) : null
-                })()}
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {CONTRACT_TYPES.map(cat => (
+                        <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={editContractTypeList.includes(cat.label)} 
+                            onChange={e => {
+                              if (e.target.checked) setEditContractTypeList([...editContractTypeList, cat.label])
+                              else setEditContractTypeList(editContractTypeList.filter(c => c !== cat.label))
+                            }}
+                          />
+                          {cat.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -795,46 +1078,82 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 Cliente
               </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '25px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Nombre</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem', fontWeight: '600' }}>{project.client?.name || 'N/A'}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Nombre / Razón Social</span>
+                  {!isEditingFicha ? (
+                    <span style={{ color: 'var(--text)', fontSize: '0.9rem', fontWeight: '600', textAlign: 'right', maxWidth: '60%' }}>{project.client?.name || 'N/A'}</span>
+                  ) : (
+                    <input type="text" value={editClientName} onChange={e => setEditClientName(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                  )}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>R.U.C.</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.client?.ruc || 'N/A'}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>RUC / Cédula</span>
+                  {!isEditingFicha ? (
+                    <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.client?.ruc || 'N/A'}</span>
+                  ) : (
+                    <input type="text" value={editClientRuc} onChange={e => setEditClientRuc(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                  )}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Teléfono</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.client?.phone || 'N/A'}</span>
+                  {!isEditingFicha ? (
+                    <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.client?.phone || 'N/A'}</span>
+                  ) : (
+                    <input type="text" value={editClientPhone} onChange={e => setEditClientPhone(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                  )}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Email</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem', wordBreak: 'break-all' }}>{project.client?.email || 'N/A'}</span>
+                  {!isEditingFicha ? (
+                    <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.client?.email || 'N/A'}</span>
+                  ) : (
+                    <input type="email" value={editClientEmail} onChange={e => setEditClientEmail(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                  )}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Dirección</span>
-                  <span style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'right', maxWidth: '60%' }}>{project.client?.address || 'N/A'}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Ciudad Cliente</span>
+                  {!isEditingFicha ? (
+                    <span style={{ color: 'var(--text)', fontSize: '0.9rem' }}>{project.client?.city || 'N/A'}</span>
+                  ) : (
+                    <input type="text" value={editClientCity} onChange={e => setEditClientCity(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                  )}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: '600' }}>Dirección Fiscal</span>
+                  {!isEditingFicha ? (
+                    <span style={{ color: 'var(--text)', fontSize: '0.9rem', textAlign: 'right', maxWidth: '60%' }}>{project.client?.address || 'N/A'}</span>
+                  ) : (
+                    <input type="text" value={editClientAddress} onChange={e => setEditClientAddress(e.target.value)} className="form-input" style={{ width: '60%', padding: '4px 8px', fontSize: '0.9rem' }} />
+                  )}
                 </div>
               </div>
 
               {/* Especificaciones Técnicas */}
-              {(() => {
-                let specs: any = {}
-                try { specs = JSON.parse(project.technicalSpecs || '{}') } catch {}
-                const desc = specs.description || project.specsTranscription || ''
-                return desc ? (
-                  <div>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                      Especificaciones Técnicas
-                    </h4>
-                    <div style={{ padding: '14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', fontSize: '0.9rem', color: 'var(--text)', lineHeight: '1.6', border: '1px solid var(--border-color)' }}>
-                      {desc}
-                    </div>
+              <div style={{ marginTop: '25px' }}>
+                <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                  Especificaciones Técnicas
+                </h4>
+                {!isEditingFicha ? (
+                  <div style={{ padding: '14px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', fontSize: '0.9rem', color: 'var(--text)', lineHeight: '1.6', border: '1px solid var(--border-color)', minHeight: '100px', whiteSpace: 'pre-wrap' }}>
+                    {(() => {
+                      try { 
+                        const specs = JSON.parse(project.technicalSpecs || '{}')
+                        return specs.description || project.specsTranscription || 'Sin especificaciones detalladas.'
+                      } catch { return project.specsTranscription || 'Sin especificaciones detalladas.' }
+                    })()}
                   </div>
-                ) : null
-              })()}
+                ) : (
+                  <textarea 
+                    value={editTechnicalSpecs} 
+                    onChange={e => setEditTechnicalSpecs(e.target.value)} 
+                    className="form-input" 
+                    style={{ width: '100%', minHeight: '150px', padding: '12px', fontSize: '0.9rem', lineHeight: '1.5' }}
+                    placeholder="Describe los detalles técnicos del proyecto..."
+                  />
+                )}
+              </div>
             </div>
           </div>
 
@@ -859,7 +1178,6 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
           </div>
         </div>
       </div>
-    </div>
 
       <div className="grid-3" style={{ marginBottom: '30px', alignItems: 'stretch' }}>
         {/* COMPARATIVA DE GASTOS */}
@@ -1097,21 +1415,34 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginTop: '2px' }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
               <span>{project.address || project.client?.address || 'Sin dirección'}</span>
             </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
-        {/* Fases */}
         <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
           <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text)' }}>Fases de Trabajo</h3>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', backgroundColor: 'var(--bg-surface)', padding: '4px 10px', borderRadius: '12px' }}>
-              {project.phases.length} Fases
-            </span>
+            {!isEditingPhases ? (
+              <button 
+                onClick={() => {
+                  setIsEditingPhases(true)
+                  setEditingPhases([...project.phases])
+                }} 
+                className="btn btn-ghost btn-sm"
+              >
+                Editar Fases
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setIsEditingPhases(false)} className="btn btn-ghost btn-sm" disabled={isSavingPhases}>Cancelar</button>
+                <button onClick={handleSavePhases} className="btn btn-primary btn-sm" disabled={isSavingPhases}>{isSavingPhases ? 'Guardando...' : 'Guardar Cambios'}</button>
+              </div>
+            )}
           </div>
           <div style={{ padding: '20px' }}>
-            {project.phases.map((phase: any, idx: number) => (
+            {(!isEditingPhases ? project.phases : editingPhases).map((phase: any, idx: number) => (
               <div key={phase.id} style={{ display: 'flex', gap: '20px', marginBottom: idx === project.phases.length - 1 ? 0 : '30px', position: 'relative' }}>
                 {idx !== project.phases.length - 1 && (
                   <div style={{ position: 'absolute', left: '15px', top: '35px', bottom: '-35px', width: '2px', backgroundColor: phase.status === 'COMPLETADA' ? 'var(--success)' : 'var(--border-color)', zIndex: 0 }} />
@@ -1130,19 +1461,79 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                 </div>
 
                 <div style={{ flex: 1, backgroundColor: 'var(--bg-surface)', padding: '15px', borderRadius: '8px', border: phase.status === 'EN_PROGRESO' || phase.status === 'ACTIVO' ? '1px solid var(--warning)' : '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <h4 style={{ margin: 0, fontSize: '1rem', color: phase.status === 'COMPLETADA' ? 'var(--success)' : 'var(--text)' }}>
-                      {phase.title}
-                    </h4>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      {phase.status === 'COMPLETADA' ? 'Completada' : phase.status === 'EN_PROGRESO' || phase.status === 'ACTIVO' ? 'En Progreso' : 'Pendiente'}
-                    </span>
-                  </div>
-                  {phase.description && <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{phase.description}</p>}
-                  {phase.estimatedDays && (
-                    <div style={{ fontSize: '0.8rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                      {phase.estimatedDays} días est.
+                  {!isEditingPhases ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <h4 style={{ margin: 0, fontSize: '1rem', color: phase.status === 'COMPLETADA' ? 'var(--success)' : 'var(--text)' }}>
+                          {phase.title}
+                        </h4>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          {phase.status === 'COMPLETADA' ? 'Completada' : phase.status === 'EN_PROGRESO' || phase.status === 'ACTIVO' ? 'En Progreso' : 'Pendiente'}
+                        </span>
+                      </div>
+                      {phase.description && <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{phase.description}</p>}
+                      {phase.estimatedDays && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                          {phase.estimatedDays} días est.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <input 
+                          type="text" 
+                          value={phase.title} 
+                          onChange={e => {
+                            const newPhases = [...editingPhases]
+                            newPhases[idx].title = e.target.value
+                            setEditingPhases(newPhases)
+                          }}
+                          className="form-input"
+                          style={{ flex: 1, fontSize: '0.9rem' }}
+                          placeholder="Título de la fase"
+                        />
+                        <select 
+                          value={phase.status} 
+                          onChange={e => {
+                            const newPhases = [...editingPhases]
+                            newPhases[idx].status = e.target.value
+                            setEditingPhases(newPhases)
+                          }}
+                          className="form-input"
+                          style={{ width: '130px', fontSize: '0.8rem' }}
+                        >
+                          <option value="PENDIENTE">Pendiente</option>
+                          <option value="EN_PROGRESO">En Progreso</option>
+                          <option value="COMPLETADA">Completada</option>
+                        </select>
+                      </div>
+                      <textarea 
+                        value={phase.description || ''} 
+                        onChange={e => {
+                          const newPhases = [...editingPhases]
+                          newPhases[idx].description = e.target.value
+                          setEditingPhases(newPhases)
+                        }}
+                        className="form-input"
+                        style={{ width: '100%', fontSize: '0.85rem', minHeight: '60px' }}
+                        placeholder="Descripción de la fase..."
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Días Est.</label>
+                        <input 
+                          type="number" 
+                          value={phase.estimatedDays || 0} 
+                          onChange={e => {
+                            const newPhases = [...editingPhases]
+                            newPhases[idx].estimatedDays = Number(e.target.value)
+                            setEditingPhases(newPhases)
+                          }}
+                          className="form-input"
+                          style={{ width: '80px', fontSize: '0.8rem' }}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1276,12 +1667,15 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
       </div>
 
       {/* Galería del Proyecto - Full Width at Bottom */}
-      <div className="card" style={{ marginTop: '30px', width: '100%' }}>
+      <div className="card" style={{ marginTop: '30px', width: '100%' }} id="galeria">
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '20px', marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <h3 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            Galería del Proyecto
-          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Planos y Galería del Proyecto
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Administra planos, diseños y fotos de obra.</p>
+          </div>
           
           <ProjectUploader 
             files={[]} 
@@ -1313,16 +1707,28 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
             }}>
               {/* Media Content */}
               {item.mimeType.startsWith('image/') ? (
-                <img 
-                  src={item.url} 
-                  alt={item.filename} 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }} 
-                  className="group-hover:scale-110"
-                />
+                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                  <img 
+                    src={item.url} 
+                    alt={item.filename} 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }} 
+                    className="group-hover:scale-110"
+                  />
+                  {(item.filename.toLowerCase().includes('plano') || item.filename.toLowerCase().includes('diseño')) && (
+                    <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', zIndex: 1 }}>
+                      PLANO
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '10px' }}>
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', wordBreak: 'break-all', opacity: 0.8 }}>{item.filename}</span>
+                  {(item.filename.toLowerCase().includes('plano') || item.filename.toLowerCase().includes('diseño')) && (
+                    <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', zIndex: 1 }}>
+                      PLANO
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1365,7 +1771,46 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </button>
+
+                {/* Edit Filename Button */}
+                <button 
+                  onClick={() => {
+                    setEditingItemId(item.id)
+                    setEditingFilename(item.filename)
+                  }}
+                  title="Renombrar archivo"
+                  style={{ 
+                    width: '38px', height: '38px', borderRadius: '50%', backgroundColor: 'var(--bg-deep)', color: 'white',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', cursor: 'pointer',
+                    transition: 'transform 0.2s ease'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
               </div>
+
+              {/* Rename Inline Input */}
+              {editingItemId === item.id && (
+                <div style={{ 
+                  position: 'absolute', inset: 0, zIndex: 10,
+                  backgroundColor: 'rgba(12, 26, 42, 0.95)', 
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px'
+                }}>
+                  <input 
+                    type="text" 
+                    value={editingFilename} 
+                    onChange={e => setEditingFilename(e.target.value)}
+                    style={{ width: '100%', padding: '6px', fontSize: '0.8rem', borderRadius: '4px', marginBottom: '8px', border: '1px solid var(--primary)' }}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => setEditingItemId(null)} className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '4px 8px' }}>Cancelar</button>
+                    <button onClick={() => handleRenameGalleryItem(item.id)} className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '4px 8px' }}>OK</button>
+                  </div>
+                </div>
+              )}
 
               {/* Delete Button (Keep separate but styled) */}
               <button 
@@ -1407,6 +1852,92 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
           </div>
         )}
       </div>
+
+      {/* ═══════ ZONA DE PELIGRO ═══════ */}
+      <div style={{ marginTop: '50px', paddingTop: '30px', borderTop: '2px dashed rgba(239, 68, 68, 0.2)' }}>
+        <div className="card" style={{ border: '1px solid rgba(239, 68, 68, 0.3)', backgroundColor: 'rgba(239, 68, 68, 0.02)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ color: 'var(--danger)', margin: 0, fontSize: '1.2rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Zona de Peligro
+              </h3>
+              <p style={{ margin: '5px 0 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                Al eliminar este proyecto, se perderán permanentemente todos los mensajes, fotos, gastos e historial. Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <button 
+              onClick={() => {
+                setShowDeleteModal(true)
+                setDeleteStep(1)
+                setDeleteConfirmText('')
+              }}
+              style={{ padding: '12px 24px', backgroundColor: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
+            >
+              Eliminar Proyecto
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal de Doble Verificación */}
+      {showDeleteModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="card" style={{ maxWidth: '500px', width: '100%', padding: '40px', border: '1px solid rgba(239, 68, 68, 0.4)', textAlign: 'center' }}>
+            {deleteStep === 1 ? (
+              <>
+                <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 25px auto', color: 'var(--danger)' }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </div>
+                <h3 style={{ fontSize: '1.5rem', marginBottom: '15px' }}>¿Eliminar este proyecto?</h3>
+                <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '30px' }}>
+                  Estás a punto de borrar <strong>{project.title}</strong>.<br/> Todos los datos asociados se destruirán de forma inmediata e irreversible.
+                </p>
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <button onClick={() => setShowDeleteModal(false)} style={{ flex: 1, padding: '14px', borderRadius: '10px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'white', cursor: 'pointer' }}>Cancelar</button>
+                  <button onClick={() => setDeleteStep(2)} style={{ flex: 1, padding: '14px', borderRadius: '10px', backgroundColor: 'var(--danger)', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>Entiendo, continuar</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 style={{ fontSize: '1.3rem', marginBottom: '15px' }}>Verificación Final</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px' }}>
+                  Para confirmar la eliminación permanente, por favor escribe el nombre del proyecto:
+                </p>
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', color: 'var(--primary)', letterSpacing: '0.5px' }}>
+                  {project.title}
+                </div>
+                <input 
+                  type="text" 
+                  autoFocus
+                  placeholder="Escribe el nombre aquí..."
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                  style={{ width: '100%', padding: '15px', backgroundColor: 'var(--bg-deep)', border: `2px solid ${deleteConfirmText === project.title ? 'var(--success)' : 'var(--border-color)'}`, borderRadius: '10px', color: 'white', textAlign: 'center', fontSize: '1.1rem', marginBottom: '25px', outline: 'none' }}
+                />
+                <div style={{ display: 'flex', gap: '15px' }}>
+                  <button 
+                    onClick={() => {
+                      setDeleteStep(1)
+                      setDeleteConfirmText('')
+                    }} 
+                    style={{ flex: 1, padding: '14px', borderRadius: '10px', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: 'white', cursor: 'pointer' }}
+                  >
+                    Atrás
+                  </button>
+                  <button 
+                    onClick={handleDeleteProject}
+                    disabled={isDeleting || deleteConfirmText !== project.title}
+                    style={{ flex: 1, padding: '14px', borderRadius: '10px', backgroundColor: deleteConfirmText === project.title ? 'var(--danger)' : 'rgba(239, 68, 68, 0.3)', border: 'none', color: 'white', fontWeight: 'bold', cursor: deleteConfirmText === project.title ? 'pointer' : 'not-allowed', opacity: deleteConfirmText === project.title ? 1 : 0.6 }}
+                  >
+                    {isDeleting ? 'Eliminando...' : 'BORRAR TODO'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

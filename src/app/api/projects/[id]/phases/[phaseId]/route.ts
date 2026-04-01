@@ -12,7 +12,7 @@ export async function PATCH(
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id, phaseId } = await params
-    const { status, createdAt } = await req.json()
+    const { status, createdAt, title, description, estimatedDays } = await req.json()
     const timestamp = createdAt ? new Date(createdAt) : new Date()
 
     // Validate if user belongs to the project team
@@ -29,11 +29,20 @@ export async function PATCH(
       return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
 
+    // Only allow non-status updates for Admins
+    const isUpdatingMetadata = title !== undefined || description !== undefined || estimatedDays !== undefined
+    if (isUpdatingMetadata && session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Only admins can modify phase metadata' }, { status: 403 })
+    }
+
     const updatedPhase = await prisma.projectPhase.update({
       where: { id: Number(phaseId) },
       data: { 
-        status,
-        completedAt: status === 'COMPLETADA' ? timestamp : null,
+        status: status !== undefined ? status : undefined,
+        title: title !== undefined ? title : undefined,
+        description: description !== undefined ? description : undefined,
+        estimatedDays: estimatedDays !== undefined ? Number(estimatedDays) : undefined,
+        completedAt: status === 'COMPLETADA' ? timestamp : (status && status !== 'COMPLETADA' ? null : undefined),
         startedAt: status === 'EN_PROGRESO' ? timestamp : undefined
       }
     })

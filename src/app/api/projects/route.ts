@@ -75,7 +75,10 @@ export async function POST(request: Request) {
     const userRole = (session.user as any).role
     const userId = (session.user as any).id
 
-    if (userRole !== 'ADMIN' && userRole !== 'ADMINISTRADORA') {
+    const isAdmin = userRole === 'ADMIN' || userRole === 'ADMINISTRADORA' || userRole === 'ADMINISTRADOR'
+    const isOperator = userRole === 'OPERATOR' || userRole === 'OPERADOR'
+
+    if (!isAdmin && !isOperator) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -121,7 +124,7 @@ export async function POST(request: Request) {
           title,
           type: mappedType as any,
           subtype: subtype || null,
-          status: status || 'ACTIVO',
+          status: isOperator ? 'LEAD' : (status || 'ACTIVO'),
           startDate: startDate ? new Date(startDate) : new Date(),
           endDate: endDate ? new Date(endDate) : null,
           address: address || null,
@@ -158,7 +161,7 @@ export async function POST(request: Request) {
             }))
           },
           team: {
-            create: (team || []).map((id: string | number) => ({
+            create: (!isOperator ? (team || []) : []).map((id: string | number) => ({
               userId: Number(id)
             }))
           },

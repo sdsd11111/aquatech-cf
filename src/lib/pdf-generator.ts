@@ -9,7 +9,7 @@ const AQUATECH_LOGO_B64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2w
 export function addAquatechHeader(doc: jsPDF, title: string, subtitle: string) {
   // 1. Logo
   try {
-    doc.addImage(AQUATECH_LOGO_B64, 'JPEG', 15, 10, 50, 14);
+    doc.addImage('/cotizacion.jpg', 'JPEG', 15, 19, 80, 18); // Center logo vertically
   } catch (e) {
     doc.setTextColor(AQUATECH_BLUE[0], AQUATECH_BLUE[1], AQUATECH_BLUE[2]);
     doc.setFont('helvetica', 'bold');
@@ -17,29 +17,45 @@ export function addAquatechHeader(doc: jsPDF, title: string, subtitle: string) {
     doc.text('AQUATECH', 15, 20);
   }
 
-  // 2. Fiscal Info (Top Right)
+  // 2. Fiscal Info (Top Right Rounded Box)
   doc.setDrawColor(0);
   doc.setLineWidth(0.1);
-  doc.roundedRect(120, 10, 75, 25, 2, 2);
+  doc.roundedRect(100, 10, 95, 36, 3, 3); // box for 6 lines
   
+  // -- Line 1: RUC --
   doc.setTextColor(0);
-  doc.setFontSize(8);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('RUC: 1105048852001', 125, 16);
+  doc.text('RUC:', 102, 16);
+  doc.text('1105048852001', 132, 16);
   
+  // -- Line 2: COTIZACION Nº --
+  doc.text('COTIZACION Nº:', 102, 21);
   doc.setTextColor(AQUATECH_BLUE[0], AQUATECH_BLUE[1], AQUATECH_BLUE[2]);
-  doc.setFontSize(10);
-  doc.text(title.toUpperCase(), 125, 22);
+  doc.text(title.split(/[:№Nº]/).pop()?.trim() || '', 140, 21);
   
-  doc.setTextColor(100);
-  doc.setFontSize(7);
+  // -- Line 3: Owner Name (Centered/Bold Large) --
+  doc.setTextColor(0);
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('CASTILLO CASTILLO PABLO JOSE', 147.5, 26, { align: 'center' });
+  
+  // -- Line 4: Address (Centered/Normal) --
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text(subtitle, 125, 28);
+  doc.text('18 DE NOVIEMBRE ENTRE CELICA Y GONZANAMA', 147.5, 30.5, { align: 'center' });
 
-  // 3. Separator
-  doc.setDrawColor(AQUATECH_BLUE[0], AQUATECH_BLUE[1], AQUATECH_BLUE[2]);
-  doc.setLineWidth(0.5);
-  doc.line(15, 38, 195, 38);
+  // -- Line 5: Teléfono --
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Teléfono:', 102, 36);
+  doc.text('0992873735', 125, 36);
+
+  // -- Line 6: correo --
+  doc.text('correo:', 102, 41);
+  doc.text('aquariegoloja@yahoo.com', 125, 41);
+
+  // 3. NO Separator (removed by user request - "una linea de mas")
 }
 
 // Helper to convert numbers to Spanish words for "SON: ..."
@@ -169,42 +185,10 @@ export function generateProfessionalPDF(
     'CASTILLO CASTILLO PABLO JOSE'
   );
 
-  // Additional header details for Quotes
-  doc.setTextColor(0);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  doc.text('18 DE NOVIEMBRE ENTRE CELICA Y GONZANAMA', 125, 31);
-  doc.text('Telf: 0992873735 | aquariegoloja@yahoo.com', 125, 34);
+  // --- 2. CLIENT DATA BLOCK (Rounded Box) ---
 
 
-  // Fiscal Box (Top Right) - Rounded
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.2);
-  doc.roundedRect(100, 10, 95, 35, 3, 3); 
-  
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text('RUC: 1105048852001', 105, 16);
-  
-  doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-  doc.setFontSize(10);
-  doc.text(`${config.docType} Nº:`, 105, 22);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`${config.docId}`, 145, 22);
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(8);
-  doc.text('CASTILLO CASTILLO PABLO JOSE', 105, 28);
-  doc.setFont('helvetica', 'normal');
-  doc.text('18 DE NOVIEMBRE ENTRE CELICA Y GONZANAMA', 105, 32);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Teléfono:', 105, 36);
-  doc.setFont('helvetica', 'normal');
-  doc.text('0992873735', 120, 36);
-  doc.setFont('helvetica', 'bold');
-  doc.text('correo:', 105, 40);
-  doc.setFont('helvetica', 'normal');
-  doc.text('aquariegoloja@yahoo.com', 118, 40);
+  // (Header drawn by addAquatechHeader called below)
 
   // --- 2. CLIENT DATA BLOCK (Rounded Box) ---
   doc.setDrawColor(0);
@@ -250,22 +234,20 @@ export function generateProfessionalPDF(
       4: { halign: 'right' as const, cellWidth: 25 },
     };
   } else {
-    head = [['Cantidad', 'Código', 'Nombre Producto', 'P. Unit', 'Descto.', 'Total']];
+    head = [['Cantidad', 'Nombre Producto', 'P.Unit.', 'Desc%', 'Total.']];
     body = pdfItems.map((item) => [
       item.quantity === 'GLOBAL' ? 'GLOBAL' : Number(item.quantity).toFixed(2),
-      item.code || 'S/C',
       item.description.toUpperCase(),
       Number(item.unitPrice).toFixed(4),
       Number(0).toFixed(3),
       Number(item.total).toFixed(4)
     ]);
     columnStyles = {
-      0: { halign: 'center' as const, cellWidth: 15 },
-      1: { halign: 'center' as const, cellWidth: 15 },
-      2: { halign: 'left' as const },
+      0: { halign: 'center' as const, cellWidth: 20 },
+      1: { halign: 'left' as const },
+      2: { halign: 'right' as const, cellWidth: 25 },
       3: { halign: 'right' as const, cellWidth: 20 },
-      4: { halign: 'right' as const, cellWidth: 15 },
-      5: { halign: 'right' as const, cellWidth: 20 },
+      4: { halign: 'right' as const, cellWidth: 25 },
     };
   }
 
@@ -274,26 +256,47 @@ export function generateProfessionalPDF(
     head: head,
     body: body,
     theme: 'grid',
-    styles: { fontSize: 7, textColor: 0, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1 },
+    styles: { fontSize: 9, textColor: 0, cellPadding: 1, lineColor: [0, 0, 0], lineWidth: 0.1 },
     headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: 'bold', halign: 'center', lineWidth: 0.2 },
     columnStyles: columnStyles,
-    margin: { left: 15, right: 15 }
+    margin: { left: 15, right: 15, top: 60, bottom: 25 }, // Margen inferior de seguridad
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) {
+        addAquatechHeader(
+          doc, 
+          `${config.docType} Nº: ${config.docId}`, 
+          'CASTILLO CASTILLO PABLO JOSE'
+        );
+      }
+    }
   });
+  
+  const pageHeight = doc.internal.pageSize.getHeight();
+  let finalY = (doc as any).lastAutoTable.finalY + 5;
+  const totalsBlockHeight = 65; // Espacio necesario para Observaciones + Cuadro Totales + Letras + Firmas
 
-  const finalY = (doc as any).lastAutoTable.finalY + 5;
+  // --- Verificación de Espacio para el Bloque de Cierre ---
+  if (finalY + totalsBlockHeight > pageHeight - 10) {
+    doc.addPage();
+    addAquatechHeader(
+      doc, 
+      `${config.docType} Nº: ${config.docId}`, 
+      'CASTILLO CASTILLO PABLO JOSE'
+    );
+    finalY = 65; // Empieza después del logo en la nueva hoja
+  }
 
   // --- 4. WORDS & TOTALS ---
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   
   const notesStr = 'Observaciones: ' + (config.notes || 'NINGUNA');
-  // Text wrapping para evitar el desborde (120 de ancho máximo)
-  const splitNotes = doc.splitTextToSize(notesStr, 120);
+  const splitNotes = doc.splitTextToSize(notesStr, 110);
   doc.text(splitNotes, 15, finalY);
   
   const wordsText = 'SON: ' + numberToSpanishWords(Number(finalTotals.totalAmount));
   const nextY = finalY + (splitNotes.length * 3.5) + 2;
-  const splitWords = doc.splitTextToSize(wordsText, 120);
+  const splitWords = doc.splitTextToSize(wordsText, 105);
   
   doc.setFont('helvetica', 'bold');
   doc.text(splitWords, 15, nextY);
@@ -301,11 +304,11 @@ export function generateProfessionalPDF(
   const endOfTextY = nextY + (splitWords.length * 3.5);
 
   // --- Totals Box (Rounded) ---
-  const totalsX = 145;
+  const totalsX = 132;
   let currentY = finalY;
   
   doc.setDrawColor(0);
-  doc.roundedRect(142, finalY - 3, 53, 35, 3, 3); 
+  doc.roundedRect(totalsX, finalY - 3, 63, 35, 3, 3); 
   
   const totalLines = [
     ['Subtotal:', finalTotals.subtotal],
@@ -319,30 +322,41 @@ export function generateProfessionalPDF(
   totalLines.forEach(([label, value], idx) => {
     const isTotal = idx === totalLines.length - 1;
     doc.setFont('helvetica', isTotal ? 'bold' : 'normal');
-    doc.setFontSize(isTotal ? 8 : 7);
-    doc.text(label.toString(), 145, currentY + 2);
+    doc.setFontSize(isTotal ? 10 : 9);
+    doc.text(label.toString(), totalsX + 3, currentY + 2);
     
-    // Draw rounded box for the value
     doc.setDrawColor(0);
     doc.setLineWidth(0.1);
-    doc.roundedRect(173, currentY - 2, 20, 5, 1, 1);
+    doc.roundedRect(173, currentY - 2, 21, 5, 1, 1);
     
-    doc.text(Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 191, currentY + 1.5, { align: 'right' });
+    doc.text(Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 193, currentY + 1.5, { align: 'right' });
     currentY += 5.5;
   });
- 
+
+  // Branding below totals
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.text('VisualFAC 11 - NSIM CIA LTDA', totalsX + 5, currentY + 1);
+  
   // --- 5. FOOTER SIGNATURES ---
-  // Ensure the signature line doesn't collide with extremely long notes
-  const sigY = Math.max(currentY + 25, endOfTextY + 20);
+  let sigY = Math.max(currentY + 18, endOfTextY + 12);
+  
+  // Verificación final para firmas (por si notas son excepcionalmente largas)
+  if (sigY + 20 > pageHeight - 10) {
+    doc.addPage();
+    addAquatechHeader(doc, `${config.docType} Nº: ${config.docId}`, 'CASTILLO CASTILLO PABLO JOSE');
+    sigY = 65;
+  }
   
   doc.setFontSize(7);
+  doc.setDrawColor(0);
   doc.line(40, sigY, 90, sigY);
   doc.line(125, sigY, 175, sigY);
   doc.text('Firma Cliente', 65, sigY + 4, { align: 'center' });
   doc.text('Firma Autorizada', 150, sigY + 4, { align: 'center' });
   
   doc.setFont('helvetica', 'bold');
-  doc.text('"Gracias por preferirnos"', 105, sigY + 14, { align: 'center' });
+  doc.text('**Gracias por preferirnos**', 105, sigY + 14, { align: 'center' });
 
   const fileName = `${config.docType}_Aquatech_${config.docId}.pdf`;
 
@@ -405,7 +419,12 @@ export function generateProjectReportPDF(data: {
     theme: 'grid',
     headStyles: { fillColor: AQUATECH_BLUE, textColor: 255 },
     styles: { fontSize: 8 },
-    margin: { left: 15, right: 15 }
+    margin: { left: 15, right: 15, top: 60, bottom: 25 },
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) {
+        addAquatechHeader(doc, 'REPORTE DE OBRA', `PROYECTO: ${project.title}`);
+      }
+    }
   });
 
   // 4. Gastos Table
@@ -434,7 +453,12 @@ export function generateProjectReportPDF(data: {
     styles: { fontSize: 8 },
     foot: [['', 'TOTAL ACUMULADO:', `$ ${totalExpenses.toFixed(2)}`, '']],
     footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold' },
-    margin: { left: 15, right: 15 }
+    margin: { left: 15, right: 15, top: 60, bottom: 25 },
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) {
+        addAquatechHeader(doc, 'REPORTE DE OBRA', `PROYECTO: ${project.title}`);
+      }
+    }
   });
 
   doc.save(`Reporte_Obra_${project.id}_${new Date().getTime()}.pdf`);
