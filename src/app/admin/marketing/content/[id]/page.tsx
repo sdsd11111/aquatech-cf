@@ -1,0 +1,98 @@
+import React from 'react'
+import { prisma as db } from '@/lib/prisma'
+import { notFound } from 'next/navigation'
+import HeadlineSelector from '@/components/marketing/HeadlineSelector'
+// Importaremos más componentes según la fase (DualEditor, ClusterSelector)
+
+export default async function PipelineDetailPage({ params }: { params: { id: string } }) {
+  const pipelineId = parseInt(params.id)
+  
+  if (isNaN(pipelineId)) {
+    notFound()
+  }
+
+  const pipeline = await db.contentPipeline.findUnique({
+    where: { id: pipelineId },
+    include: {
+      headlineOptions: true,
+      articles: true,
+      socialPosts: true,
+    }
+  })
+
+  if (!pipeline) {
+    notFound()
+  }
+
+  // Calculamos en qué paso estamos
+  const status = pipeline.status
+
+  return (
+    <div className="pipeline-detail-page" style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
+      
+      {/* Header */}
+      <div className="card shadow-sm p-4 mb-4" style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <span className="badge mb-2" style={{ background: 'var(--primary-color)', color: 'white', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.8rem' }}>
+              PIPELINE ACTIVO
+            </span>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-color)', marginBottom: '0.5rem' }}>
+              Idea: {pipeline.idea}
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+              {pipeline.ideaContext ? `Contexto: ${pipeline.ideaContext}` : 'Sin contexto adicional proporcionado.'}
+            </p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Estado Actual:</div>
+            <div style={{ fontWeight: 'bold', color: 'var(--primary-color)', background: 'rgba(8, 145, 178, 0.1)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
+              {status}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stepper (Simplified) */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', overflowX: 'auto', paddingBottom: '1rem' }}>
+        {[
+          { label: '1. Títulos', active: status === 'IDEA' || status === 'HEADLINES' },
+          { label: '2. Pilar', active: status === 'WRITING' },
+          { label: '3. Clusters', active: status === 'REVIEWING_ARTICLES' },
+          { label: '4. Imágenes', active: status === 'GENERATING_IMAGES' },
+          { label: '5. Social RRSS', active: status === 'SOCIAL_DRAFTING' || status === 'SOCIAL_IMAGES' },
+        ].map((step, i) => (
+          <div key={i} style={{ 
+            padding: '0.8rem 1.5rem', 
+            background: step.active ? 'var(--primary-color)' : 'var(--card-bg)', 
+            color: step.active ? 'white' : 'var(--text-muted)', 
+            borderRadius: '8px', 
+            border: step.active ? 'none' : '1px solid var(--border-color)',
+            fontWeight: '600',
+            whiteSpace: 'nowrap'
+          }}>
+            {step.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Main Content Area based on Status */}
+      <div className="pipeline-workspace">
+        {(status === 'IDEA' || status === 'HEADLINES') && (
+          <HeadlineSelector pipeline={pipeline} />
+        )}
+
+        {status === 'WRITING' && (
+          <div className="card shadow-sm p-5 text-center" style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <h2 style={{ color: 'var(--text-color)' }}>Redactando Artículo Pilar...</h2>
+            <p style={{ color: 'var(--text-muted)' }}>La IA de Groq está trabajando en el Markdown de ~2000 palabras.</p>
+            {/* Aquí luego llamaremos a ArticleDualEditor */}
+          </div>
+        )}
+
+        {/* We will add more status handlers in next phases */}
+      </div>
+      
+    </div>
+  )
+}

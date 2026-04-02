@@ -52,20 +52,38 @@ export default function MarketingPage() {
           </div>
         </div>
 
-        <div style={{ 
-          marginTop: '3rem', 
-          padding: '4rem', 
-          textAlign: 'center', 
-          background: 'rgba(var(--primary-rgb), 0.05)', 
-          borderRadius: '20px', 
-          border: '2px dashed var(--border-color)' 
+        <div className="card text-center p-5 mt-4" style={{ 
+          background: 'var(--card-bg)', 
+          borderRadius: '16px', 
+          border: '2px solid var(--primary-color)',
+          boxShadow: '0 10px 25px -5px rgba(var(--primary-rgb), 0.1)'
         }}>
-          <h2 style={{ color: 'var(--primary-color)', marginBottom: '1rem' }}>Listo para despegar 🚀</h2>
-          <p style={{ color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto' }}>
-            Este es el punto de partida de tu nuevo módulo. Abre una nueva ventana de Antigravity y dile: 
-            <br />
-            <strong>"Desarrollemos las herramientas de Marketing en este archivo"</strong>.
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--text-color)' }}>
+            <span style={{ fontSize: '2rem', marginRight: '10px' }}>🤖</span>
+            Generador Automático de Contenido (Pipeline SEO)
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', maxWidth: '700px', margin: '0 auto 2rem' }}>
+            Transforma una idea en una estrategia completa. Crea el <strong>Artículo Pilar</strong>, subtemas <strong>Clusters</strong>, y la grilla de publicaciones para <strong>Facebook e Instagram</strong> utilizando Inteligencia Artificial entrenada con el ADN de Aquatech.
           </p>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => window.location.href='/admin/marketing/content'}
+            style={{ 
+              padding: '0.8rem 2rem', 
+              fontSize: '1.1rem', 
+              fontWeight: '600', 
+              borderRadius: '8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}
+          >
+            Ir al Generador
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
         </div>
       </div>
 

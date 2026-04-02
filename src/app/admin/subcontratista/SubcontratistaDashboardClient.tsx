@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react'
 import { getLocalNow, formatToEcuador } from '@/lib/date-utils'
 import Link from 'next/link'
 import CalendarView from '@/components/Calendar/CalendarView'
-import AppointmentModal from '@/components/Calendar/AppointmentModal'
 
 // Inline SVG icons to match project pattern
 const svgProps = (size: number, style?: React.CSSProperties, className?: string) => ({
@@ -36,8 +35,6 @@ export default function SubcontratistaDashboardClient({
 }: SubcontratistaDashboardClientProps) {
   const [activeTab, setActiveTab] = useState<'PROYECTOS' | 'TAREAS' | 'CALENDARIO'>('TAREAS')
   const [appointments, setAppointments] = useState(initialAppointments)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingEvent, setEditingEvent] = useState<any>(null)
 
   const todayTasks = useMemo(() => {
     const today = getLocalNow()
@@ -54,21 +51,6 @@ export default function SubcontratistaDashboardClient({
   const fetchAppointments = async () => {
     const res = await fetch(`/api/appointments?userId=${user.id}`)
     if (res.ok) setAppointments(await res.json())
-  }
-
-  const handleSaveAppointment = async (data: any) => {
-    const isNew = !data.id
-    const url = isNew ? '/api/appointments' : `/api/appointments/${data.id}`
-    const method = isNew ? 'POST' : 'PATCH'
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    })
-    if (res.ok) {
-      await fetchAppointments()
-      setIsModalOpen(false)
-    }
   }
 
   const toggleStatus = async (task: any) => {
@@ -92,9 +74,7 @@ export default function SubcontratistaDashboardClient({
             <p className="page-subtitle">Panel de Subcontratista</p>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-             <button className="btn btn-primary" onClick={() => { setEditingEvent(null); setIsModalOpen(true); }}>
-               <Plus size={18}/> Nueva Tarea
-             </button>
+             {/* Read-only calendar for subcontractors */}
           </div>
         </div>
         {activeDayRecord && (
@@ -128,7 +108,7 @@ export default function SubcontratistaDashboardClient({
                 >
                   <CheckCircle2 size={24} fill={task.status === 'COMPLETADA' ? 'var(--success-bg)' : 'none'}/>
                 </button>
-                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => { setEditingEvent(task); setIsModalOpen(true); }}>
+                <div style={{ flex: 1 }}>
                    <h3 style={{ margin: 0, fontSize: '1.1rem', textDecoration: task.status === 'COMPLETADA' ? 'line-through' : 'none', opacity: task.status === 'COMPLETADA' ? 0.6 : 1 }}>
                      {task.title}
                    </h3>
@@ -150,9 +130,6 @@ export default function SubcontratistaDashboardClient({
             )) : (
               <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
                 <p style={{ color: 'var(--text-muted)' }}>No tienes tareas agendadas para hoy.</p>
-                <button className="btn btn-ghost" onClick={() => { setEditingEvent(null); setIsModalOpen(true); }}>
-                  + Crear un recordatorio
-                </button>
               </div>
             )}
           </div>
@@ -195,23 +172,14 @@ export default function SubcontratistaDashboardClient({
           <div className="card" style={{ padding: 'var(--space-md)' }}>
             <CalendarView 
               events={appointments}
-              isAdmin={true}
-              onAddEvent={(date) => { setEditingEvent({startTime: date}); setIsModalOpen(true); }}
-              onEditEvent={(event) => { setEditingEvent(event); setIsModalOpen(true); }}
+              isAdmin={false}
+              onAddEvent={() => {}}
+              onEditEvent={() => {}}
               viewMode="WEEK"
             />
           </div>
         )}
       </div>
-
-      <AppointmentModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveAppointment}
-        initialData={editingEvent}
-        userId={Number(user.id)}
-        projects={activeProjects}
-      />
     </div>
   )
 }
