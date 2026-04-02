@@ -11,6 +11,9 @@ export default async function AdminDashboard() {
   if (session?.user?.role === 'OPERATOR') {
     redirect('/admin/operador')
   }
+  if (session?.user?.role === 'SUBCONTRATISTA') {
+    redirect('/admin/subcontratista')
+  }
 
   // Fetch all dashboard data server-side
   const [

@@ -2,12 +2,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import OperatorDashboardClient from './OperatorDashboardClient'
-import OfflinePrefetcher from '@/components/OfflinePrefetcher'
+import SubcontratistaDashboardClient from './SubcontratistaDashboardClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function OperatorDashboard() {
+export default async function SubcontratistaDashboard() {
   const session = await getServerSession(authOptions)
   
   if (!session) {
@@ -15,18 +14,18 @@ export default async function OperatorDashboard() {
   }
 
   // Redirect admins to their dashboard
-  if (session.user.role === 'ADMIN') {
+  if (session.user.role === 'ADMIN' || session.user.role === 'ADMINISTRADORA') {
     redirect('/admin')
   }
 
-  // Redirect subcontratistas to their dashboard
-  if (session.user.role === 'SUBCONTRATISTA') {
-    redirect('/admin/subcontratista')
+  // Redirect operators to their own dashboard
+  if (session.user.role === 'OPERATOR') {
+    redirect('/admin/operador')
   }
 
   const userId = Number(session.user.id)
 
-  // Fetch data in parallel
+  // Fetch data in parallel — only projects, appointments (tasks), and active day record
   const [activeProjects, activeDayRecord, appointments] = await Promise.all([
     prisma.project.findMany({
       where: {
@@ -57,25 +56,12 @@ export default async function OperatorDashboard() {
     })
   ])
 
-  // Build URLs for offline use
-  const prefetchUrls = [
-    ...activeProjects.map((p: any) => `/admin/operador/proyecto/${p.id}`),
-    '/admin/inventario',
-    '/admin/cotizaciones',
-    '/admin/cotizaciones/nuevo',
-    '/admin/cotizaciones/offline',
-    '/admin/recursos',
-  ]
-
   return (
-    <>
-      <OfflinePrefetcher urls={prefetchUrls} />
-      <OperatorDashboardClient 
-        user={session.user}
-        activeProjects={activeProjects}
-        activeDayRecord={activeDayRecord}
-        appointments={appointments}
-      />
-    </>
+    <SubcontratistaDashboardClient 
+      user={session.user}
+      activeProjects={activeProjects}
+      activeDayRecord={activeDayRecord}
+      appointments={appointments}
+    />
   )
 }

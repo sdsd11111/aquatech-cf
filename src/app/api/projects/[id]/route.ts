@@ -34,6 +34,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (data.contractTypeList !== undefined) allowedFields.contractTypeList = data.contractTypeList
     if (data.technicalSpecs !== undefined) allowedFields.technicalSpecs = data.technicalSpecs
     if (data.specsTranscription !== undefined) allowedFields.specsTranscription = data.specsTranscription
+    if (data.estimatedBudget !== undefined) allowedFields.estimatedBudget = data.estimatedBudget
 
     // Handle nested client update if provided
     if (data.client) {

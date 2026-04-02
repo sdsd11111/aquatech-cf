@@ -15,7 +15,7 @@ export default async function AdminCalendarPage() {
 
   const operators = await prisma.user.findMany({
     where: { 
-      role: 'OPERATOR',
+      role: { in: ['OPERATOR', 'SUBCONTRATISTA'] },
       isActive: true
     },
     select: { id: true, name: true, image: true }

@@ -36,7 +36,7 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
   if (!project) notFound()
 
   const availableOperators = await prisma.user.findMany({
-    where: { role: 'OPERATOR' },
+    where: { role: { in: ['OPERATOR', 'SUBCONTRATISTA'] }, isActive: true },
     select: { id: true, name: true, phone: true }
   })
 

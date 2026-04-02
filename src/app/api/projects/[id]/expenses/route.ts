@@ -11,7 +11,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const session = await getServerSession(authOptions)
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       
-    const { amount, description, date, createdAt, lat, lng, receiptPhoto } = await req.json()
+    const { amount, description, date, createdAt, lat, lng, receiptPhoto, isNote } = await req.json()
     const projectId = Number(id)
     const userId = Number(session.user.id)
     const expenseDate = new Date(date || createdAt || getLocalNow())
@@ -39,19 +39,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         lat: lat ? Number(lat) : null,
         lng: lng ? Number(lng) : null,
         createdAt: createdAt ? new Date(createdAt) : undefined,
-        receiptUrl
+        receiptUrl,
+        isNote: !!isNote
       }
     })
 
-    // Automatically increase the project's realCost counter
-    await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        realCost: {
-          increment: amount
+    if (!isNote) {
+      // Automatically increase the project's realCost counter
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          realCost: {
+            increment: amount
+          }
         }
-      }
-    })
+      })
+    }
 
     // Also post it to the project chat/timeline
     await prisma.chatMessage.create({
@@ -59,7 +62,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         projectId,
         userId,
         type: 'EXPENSE_LOG',
-        content: `${session.user.name} registró un gasto: L. ${Number(amount).toFixed(2)} (${description})`,
+        content: isNote 
+          ? `${session.user.name} dejó una nota de gasto: $ ${Number(amount).toFixed(2)} (${description})`
+          : `${session.user.name} registró un gasto: $ ${Number(amount).toFixed(2)} (${description})`,
         lat: lat ? Number(lat) : null,
         lng: lng ? Number(lng) : null,
         createdAt: createdAt ? new Date(createdAt) : undefined,

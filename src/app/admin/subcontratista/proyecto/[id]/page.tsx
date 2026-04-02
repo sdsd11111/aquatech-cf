@@ -7,7 +7,7 @@ import ProjectExecutionClient from '@/components/ProjectExecutionClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function OperatorProjectDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function SubcontratistaProjectDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getServerSession(authOptions)
   if (!session) redirect('/admin/login')
@@ -31,7 +31,7 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
   // If project doesn't exist or user not in team, back to dashboard
   const isInTeam = project?.team.some((t: any) => t.userId === userId)
   if (!project || !isInTeam) {
-    redirect('/admin/operador')
+    redirect('/admin/subcontratista')
   }
 
   // Reload all chat messages for this project with user info
@@ -113,7 +113,7 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
         clientName={project.client?.name || 'Cliente sin nombre'}
         projectAddress={project.address || project.client?.address || ''}
         projectCity={project.client?.city || ''}
-        panelBase="/admin/operador"
+        panelBase="/admin/subcontratista"
       />
     </div>
   )

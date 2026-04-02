@@ -134,8 +134,8 @@ export default function NuevoProyectoPage() {
       .then(data => { if (Array.isArray(data)) setClients(data) })
       .catch(console.error)
 
-    // Fetch operators
-    fetch('/api/users?role=OPERATOR')
+    // Fetch operators and subcontratistas
+    fetch('/api/users?roles=OPERATOR,SUBCONTRATISTA')
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setAvailableTeam(data) })
       .catch(console.error)

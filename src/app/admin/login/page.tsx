@@ -39,7 +39,7 @@ export default function LoginPage() {
         if (cachedAuth && cachedAuth.username.toLowerCase() === username.toLowerCase()) {
           // Success! Even if we are offline, we trick the app via the Service Worker interceptor
           localStorage.setItem('auth_shadow_active', 'true')
-          window.location.href = cachedAuth.role === 'OPERATOR' ? '/admin/operador' : '/admin'
+          window.location.href = cachedAuth.role === 'OPERATOR' ? '/admin/operador' : cachedAuth.role === 'SUBCONTRATISTA' ? '/admin/subcontratista' : '/admin'
           return
         } else {
           setError('No hay conexión. Ingrese con el último usuario usado en este equipo.')
@@ -79,7 +79,7 @@ export default function LoginPage() {
           localStorage.removeItem('auth_shadow_active')
 
           // Pre-fetch the target dashboard to warm up the cache
-          const target = session.user.role === 'OPERATOR' ? '/admin/operador' : '/admin'
+          const target = session.user.role === 'OPERATOR' ? '/admin/operador' : session.user.role === 'SUBCONTRATISTA' ? '/admin/subcontratista' : '/admin'
           try {
             await fetch(target, { priority: 'high' })
           } catch (e) {}

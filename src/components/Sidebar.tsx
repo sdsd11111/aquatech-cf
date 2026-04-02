@@ -161,9 +161,11 @@ export default function Sidebar() {
   const effectiveRole = String(session?.user?.role || offlineUser?.role || 'OPERATOR').toUpperCase()
   const effectiveName = session?.user?.name || offlineUser?.name || 'Usuario'
   const isAdmin = effectiveRole.includes('ADMIN')
+  const isSubcontratista = effectiveRole === 'SUBCONTRATISTA'
 
-  const projectIdMatch = pathname.match(/\/admin\/operador\/proyecto\/(\d+)/)
-  const projectId = projectIdMatch ? projectIdMatch[1] : null
+  const projectIdMatch = pathname.match(/\/admin\/(operador|subcontratista)\/proyecto\/(\d+)/)
+  const projectId = projectIdMatch ? projectIdMatch[2] : null
+  const panelBase = isSubcontratista ? '/admin/subcontratista' : '/admin/operador'
 
   const dynamicOperatorNavItems: NavSection[] = [
     {
@@ -171,7 +173,7 @@ export default function Sidebar() {
       items: [
         {
           label: 'Mis Proyectos',
-          href: '/admin/operador',
+          href: panelBase,
           icon: (
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -183,20 +185,20 @@ export default function Sidebar() {
         },
         ...(projectId ? [{
           label: 'Proyecto Actual',
-          href: `/admin/operador/proyecto/${projectId}`,
+          href: `${panelBase}/proyecto/${projectId}`,
           icon: (
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
             </svg>
           ),
           subItems: [
-            { label: 'Registros', href: `/admin/operador/proyecto/${projectId}?view=records` },
-            { label: 'Bitácora', href: `/admin/operador/proyecto/${projectId}?view=chat` },
+            { label: 'Registros', href: `${panelBase}/proyecto/${projectId}?view=records` },
+            { label: 'Bitácora', href: `${panelBase}/proyecto/${projectId}?view=chat` },
           ],
         }] : []),
       ],
     },
-    {
+    ...(!isSubcontratista ? [{
       section: 'Herramientas y Recursos',
       items: [
         {
@@ -233,10 +235,10 @@ export default function Sidebar() {
           ),
         },
       ]
-    }
+    }] : [])
   ]
 
-  const navItems = isAdmin ? adminNavItems : dynamicOperatorNavItems
+  const navItems = isAdmin ? adminNavItems : dynamicOperatorNavItems as NavSection[]
 
   const isActive = (href: string) => {
     if (href === '/admin') return pathname === '/admin'
@@ -356,7 +358,8 @@ export default function Sidebar() {
               <div className="sidebar-user-name">{effectiveName}</div>
               <div className="sidebar-user-role">
                 {effectiveRole === 'ADMIN' ? 'Administrador' : 
-                 effectiveRole === 'ADMINISTRADORA' ? 'Administradora' : 'Operador'}
+                 effectiveRole === 'ADMINISTRADORA' ? 'Administradora' : 
+                 effectiveRole === 'SUBCONTRATISTA' ? 'Subcontratista' : 'Operador'}
               </div>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -378,6 +381,26 @@ export default function Sidebar() {
               { label: 'Inventario', href: '/admin/inventario', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg> },
               { label: 'Marketing', href: '/admin/marketing', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></svg> },
               { label: 'Cotizaciones', href: '/admin/cotizaciones', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg> },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                prefetch={true}
+                className={`mobile-nav-item ${isActive(item.href) ? 'active' : ''}`}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            ))}
+            <button className="mobile-nav-item" onClick={() => signOut({ callbackUrl: '/admin/login' })} style={{ background: 'none', border: 'none' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+              Salir
+            </button>
+          </>
+        ) : isSubcontratista ? (
+          <>
+            {[
+              { label: 'Mis Trabajos', href: '/admin/subcontratista', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
             ].map((item) => (
               <Link
                 key={item.href}

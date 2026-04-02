@@ -90,6 +90,7 @@ export default function TeamPage() {
   // Filter groups
   const admins = users.filter(u => u.role === 'ADMIN' || u.role === 'ADMINISTRADORA')
   const operators = users.filter(u => u.role === 'OPERATOR')
+  const subcontratistas = users.filter(u => u.role === 'SUBCONTRATISTA')
 
   const formatDate = (date: any) => {
     if (!date) return 'Sin fecha'
@@ -142,6 +143,24 @@ export default function TeamPage() {
             {operators.length === 0 && (
               <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-deep)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
                 No hay operadore registrados actualmente.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Subcontratistas */}
+        <div>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontWeight: '700' }}>
+            <span style={{ width: '4px', height: '16px', backgroundColor: 'var(--warning)', borderRadius: '2px' }} />
+            Subcontratistas
+          </h3>
+          <div className="grid-responsive">
+            {subcontratistas.map(u => (
+              <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} />
+            ))}
+            {subcontratistas.length === 0 && (
+              <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-deep)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
+                No hay subcontratistas registrados actualmente.
               </div>
             )}
           </div>
@@ -229,6 +248,7 @@ export default function TeamPage() {
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>Rol del Sistema *</label>
                 <select className="form-input" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                   <option value="OPERATOR">Operador (Campo)</option>
+                  <option value="SUBCONTRATISTA">Subcontratista</option>
                   <option value="ADMINISTRADORA">Administradora (Oficina)</option>
                 </select>
               </div>
@@ -265,7 +285,7 @@ export default function TeamPage() {
 }
 
 function UserCard({ user, onDelete, formatDate }: { user: any, onDelete: (id: number) => void, formatDate: (d: any) => string }) {
-  const statusColor = user.role === 'ADMIN' ? 'var(--success)' : (user.role === 'ADMINISTRADORA' ? 'var(--info)' : 'var(--primary)')
+  const statusColor = user.role === 'ADMIN' ? 'var(--success)' : (user.role === 'ADMINISTRADORA' ? 'var(--info)' : (user.role === 'SUBCONTRATISTA' ? 'var(--warning)' : 'var(--primary)'))
   
   return (
     <Link 
@@ -301,7 +321,8 @@ function UserCard({ user, onDelete, formatDate }: { user: any, onDelete: (id: nu
                   letterSpacing: '0.1em'
               }}>
                 {user.role === 'ADMIN' ? 'Super Administrador' : 
-                 user.role === 'ADMINISTRADORA' ? 'Administradora' : 'Operador'}
+                 user.role === 'ADMINISTRADORA' ? 'Administradora' : 
+                 user.role === 'SUBCONTRATISTA' ? 'Subcontratista' : 'Operador'}
               </div>
             </div>
 

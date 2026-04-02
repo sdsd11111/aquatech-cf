@@ -19,6 +19,8 @@ async function main() {
   await prisma.project.deleteMany()
   await prisma.client.deleteMany()
   await prisma.material.deleteMany()
+  await prisma.contentPipeline.deleteMany()
+  await prisma.brandConfig.deleteMany()
   await prisma.user.deleteMany()
 
   // Create admin user
@@ -224,6 +226,18 @@ async function main() {
       { code: 'TMR-RIEGO', name: 'Timer Programable Riego', unit: 'unidad', unitPrice: 120.00, category: 'Riego', stock: 8 },
       { code: 'TAN-ROT-2500', name: 'Tanque Rotoplas 2500L', unit: 'unidad', unitPrice: 380.00, category: 'Almacenamiento', stock: 6 },
     ],
+  })
+
+  // Create BrandConfig
+  await prisma.brandConfig.create({
+    data: {
+      name: 'Aquatech Principal',
+      imagePrompt: 'Genera una imagen fotográfica profesional, realista, luminosa, tema de piscinas cristalinas, spas o sistemas hidráulicos. Usa una paleta con acentos en azul turquesa (#0891b2) y tonos limpios.',
+      brandColors: '["#0891b2", "#ffffff", "#f8fafc", "#334155"]',
+      typography: 'Inter, sans-serif',
+      isActive: true,
+      additionalNotes: 'Evitar incluir texto en la imagen. Priorizar agua limpia y ambientes soleados o iluminación profesional.',
+    }
   })
 
   console.log('✅ Seed completed successfully!')

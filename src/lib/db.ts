@@ -15,7 +15,7 @@ export interface AuthCache {
   id: string; // 'last_session'
   username: string;
   name: string;
-  role: 'ADMIN' | 'OPERATOR';
+  role: 'ADMIN' | 'OPERATOR' | 'SUBCONTRATISTA';
   userId: string;
   lastLogin: number;
 }

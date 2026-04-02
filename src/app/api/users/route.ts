@@ -14,10 +14,13 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const role = searchParams.get('role')
+    const roles = searchParams.get('roles')
 
     // Always filter by isActive: true to hide "deleted" (renamed) users
     let whereClause: any = { isActive: true }
-    if (role) {
+    if (roles) {
+      whereClause.role = { in: roles.split(',') }
+    } else if (role) {
       whereClause.role = role
     }
 

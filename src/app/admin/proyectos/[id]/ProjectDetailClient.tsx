@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import Link from 'next/link'
@@ -10,6 +10,7 @@ import { formatToEcuador, ECUADOR_TIMEZONE } from '@/lib/date-utils'
 
 export default function ProjectDetailClient({ project, availableOperators = [] }: any) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [isGenerating, setIsGenerating] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const [isEditingTeam, setIsEditingTeam] = useState(false)
@@ -28,7 +29,12 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseDesc, setExpenseDesc] = useState('')
   const [expensePhoto, setExpensePhoto] = useState<string | null>(null)
+  const [expenseIsNote, setExpenseIsNote] = useState(false)
   const [isSavingExpense, setIsSavingExpense] = useState(false)
+  
+  const [isEditingBudget, setIsEditingBudget] = useState(false)
+  const [editBudget, setEditBudget] = useState(project.estimatedBudget || 0)
+
   const [isFichaOpen, setIsFichaOpen] = useState(false)
   const [isEditingFicha, setIsEditingFicha] = useState(false)
   const [isSavingFicha, setIsSavingFicha] = useState(false)
@@ -102,7 +108,10 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
         method: 'DELETE'
       })
       if (resp.ok) {
-        router.refresh()
+        setIsUpdatingStatus(false)
+        startTransition(() => {
+          router.refresh()
+        })
       } else {
         alert('Error al eliminar el archivo')
       }
@@ -143,7 +152,9 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
 
       if (resp.ok) {
         setIsEditingFicha(false)
-        router.refresh()
+        startTransition(() => {
+          router.refresh()
+        })
       } else {
         alert('Error al guardar los cambios')
       }
@@ -169,7 +180,9 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
 
       if (resp.ok) {
         router.push('/admin/proyectos')
-        router.refresh()
+        startTransition(() => {
+          router.refresh()
+        })
       } else {
         const data = await resp.json()
         alert(`Error: ${data.error || 'No se pudo eliminar el proyecto'}`)
@@ -246,15 +259,19 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
           amount: Number(expenseAmount),
           description: expenseDesc,
           date: new Date().toISOString(),
-          receiptPhoto: expensePhoto
+          receiptPhoto: expensePhoto,
+          isNote: expenseIsNote
         })
       })
       if (resp.ok) {
         setExpenseAmount('')
         setExpenseDesc('')
         setExpensePhoto(null)
+        setExpenseIsNote(false)
         setIsAddingExpense(false)
-        router.refresh() // Recargar datos para ver el nuevo gasto en la tabla y barra
+        startTransition(() => {
+          router.refresh() // Recargar datos sin mostrar pantalla de carga
+        })
       } else {
         alert('Error al guardar gasto')
       }
@@ -265,6 +282,26 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
     }
   }
  
+  const handleSaveBudget = async () => {
+    try {
+      const resp = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estimatedBudget: Number(editBudget) })
+      })
+      if (resp.ok) {
+        setIsEditingBudget(false)
+        startTransition(() => {
+          router.refresh()
+        })
+      } else {
+        alert('Error al actualizar el presupuesto')
+      }
+    } catch (e) {
+      alert('Error de conexión')
+    }
+  }
+
   const handleUploadToGallery = async (file: ProjectFile) => {
     setIsUploading(true)
     try {
@@ -382,7 +419,9 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
   const theoreticalBudget = Number(project.estimatedBudget) || 0
   const ivaAmount = theoreticalBudget * 0.15
   const grandTotal = theoreticalBudget + ivaAmount
-  const realExpenses = project.expenses.reduce((acc: number, exp: any) => acc + Number(exp.amount), 0)
+  const realExpenses = project.expenses
+    .filter((exp: any) => !exp.isNote)
+    .reduce((acc: number, exp: any) => acc + Number(exp.amount), 0)
   const expenseRatio = theoreticalBudget > 0 ? Math.min((realExpenses / theoreticalBudget) * 100, 100) : 0
   const isCostoExcedido = realExpenses > theoreticalBudget && theoreticalBudget > 0
 
@@ -523,7 +562,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
       doc.setFont('helvetica', 'bold')
       doc.text('Detalle de Gastos Reportados', 20, 20)
 
-      const expenseData = project.expenses.map((exp: any) => [
+      const expenseData = project.expenses.filter((e: any) => !e.isNote).map((exp: any) => [
         formatDate(exp.date),
         exp.description,
         exp.category || 'General',
@@ -533,7 +572,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
       autoTable(doc, {
         startY: 30,
         head: [['Fecha', 'Descripción', 'Categoría', 'Monto']],
-        body: expenseData,
+        body: expenseData.length > 0 ? expenseData : [['—', 'Sin gastos', '', '']],
         styles: { fontSize: 9 },
         foot: [['', '', 'TOTAL REAL:', `$ ${realExpenses.toFixed(2)}`]],
         footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' }
@@ -745,7 +784,9 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
       const fullTheoreticalBudget = Number(fullProject.estimatedBudget) || 0
       const fullIvaAmount = fullTheoreticalBudget * 0.15
       const fullGrandTotal = fullTheoreticalBudget + fullIvaAmount
-      const fullRealExpenses = (fullProject.expenses || []).reduce((acc: number, exp: any) => acc + Number(exp.amount), 0)
+      const fullRealExpenses = (fullProject.expenses || [])
+        .filter((e: any) => !e.isNote)
+        .reduce((acc: number, exp: any) => acc + Number(exp.amount), 0)
 
       autoTable(doc, {
         startY: y,
@@ -1194,9 +1235,34 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Barra Teórica */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '0.9rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '0.9rem', alignItems: 'center' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Presupuesto (Teórico)</span>
-                <span style={{ fontWeight: 'bold' }}>$ {theoreticalBudget.toFixed(2)}</span>
+                {isEditingBudget ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <input 
+                      type="number" 
+                      value={editBudget} 
+                      onChange={e => setEditBudget(e.target.value)} 
+                      className="form-input" 
+                      style={{ width: '90px', padding: '2px 6px', fontSize: '0.85rem' }} 
+                    />
+                    <button onClick={handleSaveBudget} className="btn btn-primary" style={{ padding: '2px 8px', fontSize: '0.8rem' }}>✓</button>
+                    <button onClick={() => { setIsEditingBudget(false); setEditBudget(project.estimatedBudget); }} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '0.8rem' }}>✕</button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span style={{ fontWeight: 'bold' }}>$ {theoreticalBudget.toFixed(2)}</span>
+                    <button 
+                      onClick={() => setIsEditingBudget(true)}
+                      title="Editar Presupuesto"
+                      className="btn btn-ghost"
+                      style={{ padding: '2px 8px', fontSize: '0.75rem', height: 'auto', minHeight: '0', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)', border: '1px solid rgba(56, 189, 248, 0.3)' }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      Editar
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="progress-bar" style={{ height: '14px', backgroundColor: 'var(--bg-surface)', borderRadius: '7px' }}>
                 <div className="progress-fill" style={{ width: '100%', backgroundColor: 'var(--primary)', borderRadius: '7px', opacity: 0.7 }}></div>
@@ -1215,7 +1281,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                       style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      Agregar Gasto
+                      Agregar Gasto o Nota
                     </button>
                   ) : (
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Monto/Motivo</span>
@@ -1241,6 +1307,18 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                       onChange={e => setExpenseDesc(e.target.value)}
                       style={{ flex: 1, minWidth: '180px', padding: '10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white' }}
                     />
+                  </div>
+                  
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={expenseIsNote} 
+                        onChange={e => setExpenseIsNote(e.target.checked)} 
+                        style={{ accentColor: 'var(--primary)' }}
+                      />
+                      Es solo una nota informativa (ej: adelanto de efectivo, no afecta al gasto total del proyecto)
+                    </label>
                   </div>
                   
                   <div style={{ marginBottom: '12px' }}>
@@ -1311,10 +1389,10 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
              }
           </div>
 
-          {project.expenses.length > 0 && (
+          {project.expenses.filter((e: any) => !e.isNote).length > 0 && (
             <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '10px' }}>Últimos 5 Gastos:</div>
-              {project.expenses.slice(0, 5).map((exp: any) => (
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '10px' }}>Últimos Gastos:</div>
+              {project.expenses.filter((e: any) => !e.isNote).slice(0, 5).map((exp: any) => (
                 <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {exp.receiptUrl && (
@@ -1325,9 +1403,30 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                         <img src={exp.receiptUrl} alt="Recibo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
                     )}
-                    <span style={{ color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', fontSize: '0.85rem' }}>{exp.description}</span>
+                    <span style={{ color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', fontSize: '0.85rem' }}>
+                      {exp.description}
+                    </span>
                   </div>
                   <span style={{ color: 'var(--warning)', fontWeight: 'bold', fontSize: '0.85rem' }}>$ {Number(exp.amount).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {project.expenses.filter((e: any) => e.isNote).length > 0 && (
+            <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid var(--border-color)' }}>
+              <div style={{ color: 'var(--primary)', fontSize: '0.8rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Notas / Asignaciones
+              </div>
+              {project.expenses.filter((e: any) => e.isNote).slice(0, 5).map((exp: any) => (
+                <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', fontSize: '0.85rem' }}>
+                      <strong>[NOTA]</strong> {exp.description}
+                    </span>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 'bold', fontSize: '0.85rem' }}>$ {Number(exp.amount).toFixed(2)}</span>
                 </div>
               ))}
             </div>
