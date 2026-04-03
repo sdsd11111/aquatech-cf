@@ -91,14 +91,26 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     }
 
     const userRole = (session.user as any).role
-    if (userRole !== 'ADMIN' && userRole !== 'ADMINISTRADORA') {
+    if (userRole !== 'SUPERADMIN' && userRole !== 'ADMIN' && userRole !== 'ADMINISTRADORA') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { id } = await params
+    const projectId = Number(id)
 
-    await prisma.project.delete({
-      where: { id: Number(id) }
+    // Delete in transaction to handle related quotes (unlinking)
+    await prisma.$transaction(async (tx) => {
+      // 1. Unlink quotes (set projectId to null) because they should persist 
+      // but MySQL might have RESTRICT by default on the FK.
+      await tx.quote.updateMany({
+        where: { projectId: projectId },
+        data: { projectId: null }
+      })
+
+      // 2. Delete the project (cascades to phases, budgetItems, teams, etc. based on schema)
+      await tx.project.delete({
+        where: { id: projectId }
+      })
     })
 
     return NextResponse.json({ success: true })

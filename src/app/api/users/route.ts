@@ -201,118 +201,117 @@ export async function DELETE(request: Request) {
       }, { status: 403 })
     }
 
-    // 1. Find a recipient for the data (First active SUPERADMIN)
+    // 1. Find a recipient for the data (First active SUPERADMIN or high-level admin)
     const recipientAdmin = await prisma.user.findFirst({
-      where: { role: 'SUPERADMIN' as any, isActive: true },
+      where: { 
+        role: { in: ['SUPERADMIN', 'ADMIN', 'ADMINISTRADORA'] as any }, 
+        isActive: true 
+      },
       orderBy: { id: 'asc' }
     })
     
-    // Fallback if no SuperAdmin, use the master account ID (1)
-    const adminId = recipientAdmin?.id || 1 
+    // Safety check: If for some reason we cannot find any active admin, we must abort
+    if (!recipientAdmin) {
+      console.error('No active admin found to inherit data from user:', userIdToDelete)
+      return NextResponse.json({ error: 'No se encontró un administrador activo para reasignar los datos.' }, { status: 500 })
+    }
+    
+    const adminId = recipientAdmin.id 
     const originalName = userToDeactivate.name
 
     // 2. Data Inheritance Transaction
-    await prisma.$transaction(async (tx) => {
-      const authorNote = ` [Autor org: ${originalName}]`
+    try {
+      await prisma.$transaction(async (tx) => {
+        const authorNote = ` [Autor org: ${originalName}]`
 
-      // --- 1. APPOINTMENTS (Citas) ---
-      // We loop these to add notes to descriptions
-      const appointments = await tx.appointment.findMany({ where: { userId: userIdToDelete } })
-      for (const app of appointments) {
-        await tx.appointment.update({
-          where: { id: app.id },
-          data: { 
-            userId: adminId,
-            description: (app.description || '') + authorNote
-          }
+        // --- 1. APPOINTMENTS ---
+        await tx.appointment.updateMany({
+          where: { userId: userIdToDelete },
+          data: { userId: adminId }
         })
-      }
 
-      // --- 2. CHAT MESSAGES ---
-      // For messages, we'll just transfer the ID to avoid heavy loop if thousands exist.
-      // But let's try a batch update for the text content if it's critical.
-      // For now, reassigning the ID is the safest and most efficient.
-      await tx.chatMessage.updateMany({
-        where: { userId: userIdToDelete },
-        data: { userId: adminId }
-      })
-
-      // --- 3. EXPENSES ---
-      const expenses = await tx.expense.findMany({ where: { userId: userIdToDelete } })
-      for (const exp of expenses) {
-        await tx.expense.update({
-          where: { id: exp.id },
-          data: { 
-            userId: adminId,
-            description: (exp.description || '') + authorNote
-          }
+        // --- 2. CHAT MESSAGES ---
+        await tx.chatMessage.updateMany({
+          where: { userId: userIdToDelete },
+          data: { userId: adminId }
         })
-      }
 
-      // --- 4. DAY RECORDS ---
-      await tx.dayRecord.updateMany({
-        where: { userId: userIdToDelete },
-        data: { userId: adminId }
-      })
-
-      // --- 5. PHASE COMPLETIONS ---
-      const completionsToDelete = await tx.phaseCompletion.findMany({
-        where: { userId: userIdToDelete }
-      })
-      for (const comp of completionsToDelete) {
-        const adminAlreadyCompleted = await tx.phaseCompletion.findUnique({
-          where: { phaseId_userId: { phaseId: comp.phaseId, userId: adminId } }
+        // --- 3. EXPENSES ---
+        await tx.expense.updateMany({
+          where: { userId: userIdToDelete },
+          data: { userId: adminId }
         })
-        if (!adminAlreadyCompleted) {
-          await tx.phaseCompletion.update({
-            where: { id: comp.id },
-            data: { userId: adminId }
+
+        // --- 4. DAY RECORDS ---
+        await tx.dayRecord.updateMany({
+          where: { userId: userIdToDelete },
+          data: { userId: adminId }
+        })
+
+        // --- 5. PHASE COMPLETIONS ---
+        // Handle unique constraint phaseId_userId
+        const userCompletions = await tx.phaseCompletion.findMany({
+          where: { userId: userIdToDelete }
+        })
+        
+        for (const comp of userCompletions) {
+          const exists = await tx.phaseCompletion.findUnique({
+            where: { phaseId_userId: { phaseId: comp.phaseId, userId: adminId } }
           })
-        } else {
-          await tx.phaseCompletion.delete({ where: { id: comp.id } })
+          if (exists) {
+            await tx.phaseCompletion.delete({ where: { id: comp.id } })
+          } else {
+            await tx.phaseCompletion.update({
+              where: { id: comp.id },
+              data: { userId: adminId }
+            })
+          }
         }
-      }
 
-      // --- 6. PROJECTS (As Creator) ---
-      await tx.project.updateMany({
-        where: { createdBy: userIdToDelete },
-        data: { createdBy: adminId }
-      })
+        // --- 6. PROJECTS (As Creator) ---
+        await tx.project.updateMany({
+          where: { createdBy: userIdToDelete },
+          data: { createdBy: adminId }
+        })
 
-      // --- 7. QUOTES (As Creator) ---
-      await tx.quote.updateMany({
-        where: { userId: userIdToDelete },
-        data: { userId: adminId }
-      })
+        // --- 7. QUOTES (As Creator) ---
+        await tx.quote.updateMany({
+          where: { userId: userIdToDelete },
+          data: { userId: adminId }
+        })
 
-      // --- 8. BLOG POSTS ---
-      await tx.blogPost.updateMany({
-        where: { authorId: userIdToDelete },
-        data: { authorId: adminId }
-      })
+        // --- 8. BLOG POSTS ---
+        await tx.blogPost.updateMany({
+          where: { authorId: userIdToDelete },
+          data: { authorId: adminId }
+        })
 
-      // --- 9. CONTENT PIPELINES ---
-      await tx.contentPipeline.updateMany({
-        where: { createdById: userIdToDelete },
-        data: { createdById: adminId }
-      })
+        // --- 9. CONTENT PIPELINES ---
+        await tx.contentPipeline.updateMany({
+          where: { createdById: userIdToDelete },
+          data: { createdById: adminId }
+        })
 
-      // --- 10. PROJECT TEAM ASSIGNMENTS ---
-      await tx.projectTeam.deleteMany({
-        where: { userId: userIdToDelete }
-      })
+        // --- 10. PROJECT TEAM ASSIGNMENTS ---
+        await tx.projectTeam.deleteMany({
+          where: { userId: userIdToDelete }
+        })
 
-      // 3. Deactivate User
-      // We keep the user record but hide it and destroy credentials
-      await tx.user.update({
-        where: { id: userIdToDelete },
-        data: { 
-          isActive: false,
-          email: `${userToDeactivate.email || ''}_del_${Date.now()}`, 
-          username: `${userToDeactivate.username}_old_${Date.now()}`
-        }
-      })
-    })
+        // 3. Deactivate User and Free Credentials
+        await tx.user.update({
+          where: { id: userIdToDelete },
+          data: { 
+            isActive: false,
+            email: `${userToDeactivate.email || ''}_del_${Date.now()}`, 
+            username: `${userToDeactivate.username}_old_${Date.now()}`,
+            sessionVersion: { increment: 1 } // Invalidate existing sessions
+          }
+        })
+      }, { timeout: 20000 }) // High timeout for data-heavy reassignments
+    } catch (txError) {
+      console.error('Transaction failed during user deactivation:', txError)
+      throw txError // Let the outer catch handle it
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
