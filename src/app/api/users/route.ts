@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@prisma/client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
@@ -16,17 +17,33 @@ export async function GET(request: Request) {
     const role = searchParams.get('role')
     const roles = searchParams.get('roles')
 
+    const currentUserRole = (session.user as any).role
+    const isSuperAdmin = currentUserRole === 'SUPERADMIN'
+
     // Always filter by isActive: true to hide "deleted" (renamed) users
     const whereClause: any = { isActive: true }
+    
+    // HIDE SUPERADMINS from everyone except Superadmins
+    if (!isSuperAdmin) {
+      whereClause.role = { not: 'SUPERADMIN' }
+    }
+
     if (roles) {
-      whereClause.role = { in: roles.split(',') }
+      // If filtering by specific roles, we still respect the Superadmin hiding rule
+      const requestedRoles = roles.split(',')
+      whereClause.role = { 
+        in: isSuperAdmin ? requestedRoles : requestedRoles.filter(r => r !== 'SUPERADMIN')
+      }
     } else if (role) {
+      if (role === 'SUPERADMIN' && !isSuperAdmin) {
+        return NextResponse.json([]) // Non-superadmins see nothing if they ask for superadmins
+      }
       whereClause.role = role
     }
 
     // Hide their own profile if the user is an ADMINISTRADORA
-    if ((session.user as any).role === 'ADMINISTRADORA') {
-      whereClause.id = { not: Number(session.user.id) }
+    if (currentUserRole === 'ADMINISTRADORA') {
+      whereClause.id = { ...whereClause.id, not: Number(session.user.id) }
     }
 
     const users = await prisma.user.findMany({
@@ -83,7 +100,8 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     const currentUserRole = (session?.user as any)?.role
-    const isAdminPrivileged = session?.user && (currentUserRole === 'ADMIN' || currentUserRole === 'ADMINISTRADORA')
+    const isSuperAdmin = currentUserRole === 'SUPERADMIN'
+    const isAdminPrivileged = session?.user && (isSuperAdmin || currentUserRole === 'ADMIN' || currentUserRole === 'ADMINISTRADORA')
     
     if (!isAdminPrivileged) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -95,8 +113,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // --- RBAC RULES FOR ROLE CREATION ---
+    // Only SUPERADMIN can create ADMIN or ADMINISTRADORA or other SUPERADMINS
+    const higherRoles = ['SUPERADMIN', 'ADMIN', 'ADMINISTRADORA']
+    if (higherRoles.includes(role) && !isSuperAdmin) {
+      return NextResponse.json({ error: 'Solo el Super Administrador puede crear cuentas de administración.' }, { status: 403 })
+    }
+
     // Check if username is truly taken by an ACTIVE user
-    // Since we renamed inactive ones, this should only find active duplicates
     const existingUser = await prisma.user.findFirst({
       where: { username, isActive: true }
     })
@@ -144,7 +168,8 @@ export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     const currentUserRole = (session?.user as any)?.role
-    const isAdminPrivileged = session?.user && (currentUserRole === 'ADMIN' || currentUserRole === 'ADMINISTRADORA')
+    const isSuperAdmin = currentUserRole === 'SUPERADMIN'
+    const isAdminPrivileged = session?.user && (isSuperAdmin || currentUserRole === 'ADMIN' || currentUserRole === 'ADMINISTRADORA')
     
     if (!isAdminPrivileged) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -157,60 +182,80 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Missing user ID' }, { status: 400 })
     }
 
-    if (Number(id) === Number(session.user.id)) {
+    const userIdToDelete = Number(id)
+    if (userIdToDelete === Number(session.user.id)) {
       return NextResponse.json({ error: 'No puedes eliminarte a ti mismo' }, { status: 400 })
     }
 
-    const userIdToDelete = Number(id)
-    const adminId = 1 // Administrador Aquatech
-
-    // 1. Get user name to append to notes
+    // --- RBAC RULES FOR DELETION ---
     const userToDeactivate = await prisma.user.findUnique({ where: { id: userIdToDelete } })
     if (!userToDeactivate) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
     }
 
+    // RBAC: Only SUPERADMIN can delete another Admin (ADMIN/ADMINISTRADORA)
+    const protectedRoles = ['SUPERADMIN' as any, 'ADMIN' as any, 'ADMINISTRADORA' as any]
+    if (protectedRoles.includes(userToDeactivate.role) && !isSuperAdmin) {
+      return NextResponse.json({ 
+        error: 'No tienes permisos para eliminar a otro Administrador. Solo el Super Administrador puede realizar esta acción.' 
+      }, { status: 403 })
+    }
+
+    // 1. Find a recipient for the data (First active SUPERADMIN)
+    const recipientAdmin = await prisma.user.findFirst({
+      where: { role: 'SUPERADMIN' as any, isActive: true },
+      orderBy: { id: 'asc' }
+    })
+    
+    // Fallback if no SuperAdmin, use the master account ID (1)
+    const adminId = recipientAdmin?.id || 1 
     const originalName = userToDeactivate.name
 
     // 2. Data Inheritance Transaction
     await prisma.$transaction(async (tx) => {
-      const note = ` [Originalmente por: ${originalName}]`
+      const authorNote = ` [Autor org: ${originalName}]`
 
-      // --- ChatMessages ---
-      await tx.chatMessage.updateMany({
-        where: { userId: userIdToDelete },
-        data: { 
-          userId: adminId,
-          content: {
-            // @ts-ignore - Prisma doesn't support complex concat in updateMany for all systems, 
-            // but we'll try a safe approach or just reassign if field is null.
+      // --- 1. APPOINTMENTS (Citas) ---
+      // We loop these to add notes to descriptions
+      const appointments = await tx.appointment.findMany({ where: { userId: userIdToDelete } })
+      for (const app of appointments) {
+        await tx.appointment.update({
+          where: { id: app.id },
+          data: { 
+            userId: adminId,
+            description: (app.description || '') + authorNote
           }
-        }
-      })
-      // Better way to handle notes: individual updates or check for field type
-      // Since updateMany with string concatenation is tricky in Prisma/DB combos, 
-      // we'll update IDs first and then we'd need to loop or use raw queries.
-      // For simplicity and safety, we'll reassign the IDs.
-      
+        })
+      }
+
+      // --- 2. CHAT MESSAGES ---
+      // For messages, we'll just transfer the ID to avoid heavy loop if thousands exist.
+      // But let's try a batch update for the text content if it's critical.
+      // For now, reassigning the ID is the safest and most efficient.
       await tx.chatMessage.updateMany({
         where: { userId: userIdToDelete },
         data: { userId: adminId }
       })
 
-      // --- Expenses ---
-      await tx.expense.updateMany({
-        where: { userId: userIdToDelete },
-        data: { userId: adminId }
-      })
+      // --- 3. EXPENSES ---
+      const expenses = await tx.expense.findMany({ where: { userId: userIdToDelete } })
+      for (const exp of expenses) {
+        await tx.expense.update({
+          where: { id: exp.id },
+          data: { 
+            userId: adminId,
+            description: (exp.description || '') + authorNote
+          }
+        })
+      }
 
-      // --- DayRecords ---
+      // --- 4. DAY RECORDS ---
       await tx.dayRecord.updateMany({
         where: { userId: userIdToDelete },
         data: { userId: adminId }
       })
 
-      // --- PhaseCompletions ---
-      // We need to avoid unique constraint if admin already completed it
+      // --- 5. PHASE COMPLETIONS ---
       const completionsToDelete = await tx.phaseCompletion.findMany({
         where: { userId: userIdToDelete }
       })
@@ -228,29 +273,42 @@ export async function DELETE(request: Request) {
         }
       }
 
-      // --- ProjectTeam ---
-      // Just delete from team assignments to avoid duplicates
-      await tx.projectTeam.deleteMany({
-        where: { userId: userIdToDelete }
-      })
-
-      // --- Projects Created By ---
+      // --- 6. PROJECTS (As Creator) ---
       await tx.project.updateMany({
         where: { createdBy: userIdToDelete },
         data: { createdBy: adminId }
       })
 
-      // --- Quotes Created By ---
+      // --- 7. QUOTES (As Creator) ---
       await tx.quote.updateMany({
         where: { userId: userIdToDelete },
         data: { userId: adminId }
       })
 
+      // --- 8. BLOG POSTS ---
+      await tx.blogPost.updateMany({
+        where: { authorId: userIdToDelete },
+        data: { authorId: adminId }
+      })
+
+      // --- 9. CONTENT PIPELINES ---
+      await tx.contentPipeline.updateMany({
+        where: { createdById: userIdToDelete },
+        data: { createdById: adminId }
+      })
+
+      // --- 10. PROJECT TEAM ASSIGNMENTS ---
+      await tx.projectTeam.deleteMany({
+        where: { userId: userIdToDelete }
+      })
+
       // 3. Deactivate User
+      // We keep the user record but hide it and destroy credentials
       await tx.user.update({
         where: { id: userIdToDelete },
         data: { 
           isActive: false,
+          email: `${userToDeactivate.email || ''}_del_${Date.now()}`, 
           username: `${userToDeactivate.username}_old_${Date.now()}`
         }
       })

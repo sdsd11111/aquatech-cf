@@ -9,7 +9,7 @@ export default async function AdminCalendarPage() {
   if (!session) redirect('/admin/login')
 
   const userRole = (session.user as any).role
-  if (userRole !== 'ADMIN' && userRole !== 'ADMINISTRADORA') {
+  if (userRole !== 'ADMIN' && userRole !== 'ADMINISTRADORA' && userRole !== 'SUPERADMIN') {
     redirect('/admin')
   }
 

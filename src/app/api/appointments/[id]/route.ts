@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { isAdmin as checkIsAdmin } from '@/lib/rbac'
 
 export async function PATCH(
   request: Request,
@@ -25,10 +26,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
     }
 
-    // Role-based auth: Admins can modify everything. Operators can only modify their own and mostly status?
-    const isAdmin = (session.user as any).role === 'ADMIN' || (session.user as any).role === 'ADMINISTRADORA'
+    const isAdmin = checkIsAdmin((session.user as any).role)
     if (!isAdmin && existing.userId !== Number(session.user.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Validar rango si se está actualizando
+    const start = startTime ? new Date(startTime) : existing.startTime
+    const end = endTime ? new Date(endTime) : existing.endTime
+    if (end <= start) {
+      return NextResponse.json({ error: 'La fecha de fin debe ser posterior a la de inicio' }, { status: 400 })
     }
 
     const data: any = {}
@@ -73,7 +80,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
     }
 
-    const isAdmin = (session.user as any).role === 'ADMIN' || (session.user as any).role === 'ADMINISTRADORA'
+    const isAdmin = checkIsAdmin((session.user as any).role)
     if (!isAdmin && existing.userId !== Number(session.user.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

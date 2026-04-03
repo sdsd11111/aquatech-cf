@@ -12,7 +12,7 @@ import {
   generateProjectReportPDF, 
   addAquatechHeader 
 } from '@/lib/pdf-generator'
-import { formatToEcuador, ECUADOR_TIMEZONE } from '@/lib/date-utils'
+import { formatToEcuador, ECUADOR_TIMEZONE, formatTimeEcuador, formatDateEcuador } from '@/lib/date-utils'
 
 import Link from 'next/link'
 
@@ -41,6 +41,17 @@ export default function ProjectExecutionClient({
       .filter((e: any) => !e.isNote)
       .reduce((acc: number, curr: any) => acc + Number(curr.amount), 0)
   }, [expenses])
+
+  // --- EXPENSE EDIT/DELETE STATE ---
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<any>(null)
+  const [expenseFormFields, setExpenseFormFields] = useState({
+    amount: '',
+    description: '',
+    isNote: false,
+    date: new Date().toISOString().split('T')[0]
+  })
+  const [isSavingExpense, setIsSavingExpense] = useState(false)
 
   const handleDownload = async (url: string, filename: string) => {
     setHandleDownloadLoading(url)
@@ -633,20 +644,15 @@ export default function ProjectExecutionClient({
   }
 
   // Extract all media files from the project chat messages
-  const projectMediaFiles: ProjectFile[] = initialChat
-    .filter((msg: any) => msg.media && msg.media.length > 0)
-    .flatMap((msg: any) => msg.media.map((m: any) => {
-      let type: 'IMAGE' | 'VIDEO' | 'DOCUMENT' = 'DOCUMENT'
-      if (msg.type === 'IMAGE' || m.mimeType.startsWith('image/')) type = 'IMAGE'
-      else if (msg.type === 'VIDEO' || m.mimeType.startsWith('video/')) type = 'VIDEO'
-      
-      return {
-        url: m.url,
-        filename: m.filename,
-        mimeType: m.mimeType,
-        type
-      }
+  // Extract all media files from the project gallery (which now includes chat media from server)
+  const projectMediaFiles: ProjectFile[] = useMemo(() => {
+    return (project.gallery || []).map((m: any) => ({
+      url: m.url,
+      filename: m.filename,
+      mimeType: m.mimeType,
+      type: m.mimeType?.startsWith('image/') ? 'IMAGE' : m.mimeType?.startsWith('video/') ? 'VIDEO' : 'DOCUMENT'
     }))
+  }, [project.gallery])
 
   const combinedChat = [
     ...initialChat,
@@ -811,7 +817,44 @@ export default function ProjectExecutionClient({
       });
     } catch(err) {
       console.error(err)
-      alert("Error al generar Reporte")
+    }
+  }
+
+  const handleDeleteExpense = async (expenseId: number) => {
+    if (!confirm('¿Seguro que deseas eliminar este gasto?')) return
+    try {
+      const res = await fetch(`/api/projects/${project.id}/expenses/${expenseId}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error)
+    }
+  }
+
+  const handleUpdateExpense = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSavingExpense(true)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/expenses/${editingExpense.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...expenseFormFields,
+          amount: Number(expenseFormFields.amount)
+        })
+      })
+      if (res.ok) {
+        setIsExpenseModalOpen(false)
+        setEditingExpense(null)
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error updating expense:', error)
+    } finally {
+      setIsSavingExpense(false)
     }
   }
 
@@ -978,7 +1021,7 @@ export default function ProjectExecutionClient({
                     {pendingDayAction ? (
                       `Acción offline: ${pendingDayAction.type === 'DAY_START' ? 'Inicio en cola' : 'Fin en cola'}`
                     ) : (
-                      `Día en progreso desde las ${new Date(activeRecord.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`
+                      `Día en progreso desde las ${formatTimeEcuador(activeRecord.startTime)}`
                     )}
                   </p>
                 )}
@@ -1225,11 +1268,34 @@ export default function ProjectExecutionClient({
                                   {e.isPending && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
                                 </span>
                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                  {e.isPending ? 'Pendiente de sincronizar' : (mounted ? new Date(e.date).toLocaleDateString() : '')}
+                                  {e.isPending ? 'Pendiente' : (mounted ? formatDateEcuador(e.date) : '')} • {e.userName || 'Operador'}
                                 </span>
                               </div>
                             </div>
-                            <span style={{ fontWeight: 'bold', color: e.isPending ? 'var(--warning)' : 'var(--text)' }}>$ {Number(e.amount).toFixed(2)}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ fontWeight: 'bold', color: e.isPending ? 'var(--warning)' : 'var(--text)' }}>$ {Number(e.amount).toFixed(2)}</span>
+                              {!e.isPending && (
+                                <div style={{ display: 'flex', gap: '5px' }}>
+                                  <button 
+                                    onClick={() => {
+                                      setEditingExpense(e)
+                                      setExpenseFormFields({
+                                        amount: e.amount.toString(),
+                                        description: e.description || '',
+                                        isNote: e.isNote,
+                                        date: new Date(e.date).toISOString().split('T')[0]
+                                      })
+                                      setIsExpenseModalOpen(true)
+                                    }}
+                                    className="btn btn-ghost" 
+                                    style={{ padding: '4px', color: 'var(--info)' }}
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button onClick={() => handleDeleteExpense(e.id)} className="btn btn-ghost" style={{ padding: '4px', color: 'var(--danger)' }}>✕</button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1248,11 +1314,32 @@ export default function ProjectExecutionClient({
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span style={{ color: 'var(--primary)', fontWeight: '500' }}>{e.description}</span>
                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                  {mounted ? new Date(e.date).toLocaleDateString() : ''} • Informativo
+                                  {mounted ? formatDateEcuador(e.date) : ''} • {e.userName || 'Admin'}
                                 </span>
                               </div>
                             </div>
-                            <span style={{ fontWeight: 'bold', color: 'var(--text-muted)' }}>$ {Number(e.amount).toFixed(2)}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ fontWeight: 'bold', color: 'var(--text-muted)' }}>$ {Number(e.amount).toFixed(2)}</span>
+                              <div style={{ display: 'flex', gap: '5px' }}>
+                                <button 
+                                  onClick={() => {
+                                    setEditingExpense(e)
+                                    setExpenseFormFields({
+                                      amount: e.amount.toString(),
+                                      description: e.description || '',
+                                      isNote: e.isNote,
+                                      date: new Date(e.date).toISOString().split('T')[0]
+                                    })
+                                    setIsExpenseModalOpen(true)
+                                  }}
+                                  className="btn btn-ghost" 
+                                  style={{ padding: '4px', color: 'var(--info)' }}
+                                >
+                                  ✏️
+                                </button>
+                                <button onClick={() => handleDeleteExpense(e.id)} className="btn btn-ghost" style={{ padding: '4px', color: 'var(--danger)' }}>✕</button>
+                              </div>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1501,7 +1588,7 @@ export default function ProjectExecutionClient({
                       </div>
                     </div>
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px', alignSelf: msg.isMe ? 'flex-end' : 'flex-start', margin: '0 4px' }}>
-                        {msg.isPending ? 'Ahora' : (mounted ? new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '')}
+                        {msg.isPending ? 'Ahora' : (mounted ? formatTimeEcuador(msg.createdAt) : '')}
                     </span>
                   </div>
                 ))
@@ -1643,6 +1730,39 @@ export default function ProjectExecutionClient({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PARA EDITAR GASTOS (OPERADOR) */}
+      {isExpenseModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '25px' }}>
+            <h3 style={{ marginBottom: '20px', fontSize: '1.2rem' }}>Editar Gasto/Nota</h3>
+            <form onSubmit={handleUpdateExpense} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div className="form-group">
+                <label className="form-label">Monto ($)</label>
+                <input type="number" step="0.01" className="form-input" value={expenseFormFields.amount} onChange={e => setExpenseFormFields({...expenseFormFields, amount: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Descripción</label>
+                <input type="text" className="form-input" value={expenseFormFields.description} onChange={e => setExpenseFormFields({...expenseFormFields, description: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Fecha</label>
+                <input type="date" className="form-input" value={expenseFormFields.date} onChange={e => setExpenseFormFields({...expenseFormFields, date: e.target.value})} required />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input type="checkbox" id="opIsNote" checked={expenseFormFields.isNote} onChange={e => setExpenseFormFields({...expenseFormFields, isNote: e.target.checked})} />
+                <label htmlFor="opIsNote">¿Es solo una nota?</label>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setIsExpenseModalOpen(false)} className="btn btn-ghost" style={{ flex: 1 }}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={isSavingExpense}>
+                  {isSavingExpense ? '...' : 'Actualizar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

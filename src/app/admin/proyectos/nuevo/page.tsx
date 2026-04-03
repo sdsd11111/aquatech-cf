@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import ProjectUploader, { ProjectFile } from '@/components/ProjectUploader'
 import MediaCapture from '@/components/MediaCapture'
 import { generateProfessionalPDF } from '@/lib/pdf-generator'
 
 export default function NuevoProyectoPage() {
+  const { data: session } = useSession()
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -101,6 +103,8 @@ export default function NuevoProyectoPage() {
     notes: ''
   })
   const [clients, setClients] = useState<any[]>([])
+  const [clientSearchText, setClientSearchText] = useState('')
+  const [showClientDropdown, setShowClientDropdown] = useState(false)
 
   // Step 3: Fases
   const [phases, setPhases] = useState<any[]>([
@@ -172,11 +176,13 @@ export default function NuevoProyectoPage() {
     
     setError('')
     setStep(s => s + 1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleBack = () => {
     setError('')
     setStep(s => s - 1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleCreate = async () => {
@@ -305,11 +311,11 @@ export default function NuevoProyectoPage() {
     setBudgetItems(newItems)
   }
 
-  const selectExistingClient = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value
+  const selectExistingClient = (id: string) => {
     if (id === 'NEW') {
       setIsNewClient(true)
       setClientData({ id: null, name: '', ruc: '', phone: '', email: '', city: '', address: '', notes: '' })
+      setClientSearchText('+ Añadir Nuevo Cliente')
     } else {
       const c = clients.find(c => c.id === id)
       if (c) {
@@ -324,9 +330,13 @@ export default function NuevoProyectoPage() {
           address: c.address || '',
           notes: c.notes || ''
         })
+        setClientSearchText(c.name)
       }
     }
+    setShowClientDropdown(false)
   }
+
+  const filteredClients = clients.filter(c => c.name.toLowerCase().includes(clientSearchText.toLowerCase())).slice(0, 10)
 
   // Common UI styles
   const inputGroupStyle = { marginBottom: '20px' }
@@ -382,7 +392,8 @@ export default function NuevoProyectoPage() {
       docType: 'PRESUPUESTO',
       docId: preview ? 'VISTA-PREVIA' : `PRJ-${Date.now().toString().slice(-4)}`,
       notes: projectData.technicalSpecs?.description || 'DOCUMENTO PRELIMINAR',
-      action: preview ? 'preview' : 'save'
+      action: preview ? 'preview' : 'save',
+      sellerName: session?.user?.name || 'Aquatech'
     })
 
     if (preview && typeof result === 'string') {
@@ -564,15 +575,54 @@ export default function NuevoProyectoPage() {
             <div className="animate-fade-in">
               <h3 style={{ marginBottom: '20px', color: 'var(--text)' }}>Información del Cliente</h3>
               
-              <div style={{ ...inputGroupStyle, display: 'flex', gap: '15px', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
+              <div style={{ ...inputGroupStyle, display: 'flex', gap: '15px', alignItems: 'flex-end', zIndex: 50, position: 'relative' }}>
+                <div style={{ flex: 1, position: 'relative' }}>
                   <label style={labelStyle}>¿Cliente Existente o Nuevo?</label>
-                  <select className="form-input" onChange={selectExistingClient} defaultValue={isNewClient ? 'NEW' : ''}>
-                    <option value="NEW">+ Añadir Nuevo Cliente</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Buscar cliente por nombre..." 
+                    value={clientSearchText}
+                    onChange={(e) => {
+                      setClientSearchText(e.target.value)
+                      setShowClientDropdown(true)
+                    }}
+                    onFocus={() => setShowClientDropdown(true)}
+                    // Delay hiding to allow click on option
+                    onBlur={() => setTimeout(() => setShowClientDropdown(false), 200)}
+                  />
+                  {showClientDropdown && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '5px', maxHeight: '250px', overflowY: 'auto', zIndex: 100, boxShadow: '0 4px 15px rgba(0,0,0,0.3)' }}>
+                      <div 
+                        style={{ padding: '12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--primary)', fontWeight: 'bold' }}
+                        onClick={() => selectExistingClient('NEW')}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        + Añadir Nuevo Cliente
+                      </div>
+                      {filteredClients.map(c => (
+                        <div 
+                          key={c.id} 
+                          style={{ padding: '12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text)' }}
+                          onClick={() => selectExistingClient(c.id)}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--primary)';
+                            e.currentTarget.style.color = '#ffffff';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = 'var(--text)';
+                          }}
+                        >
+                          {c.name}
+                        </div>
+                      ))}
+                      {filteredClients.length === 0 && (
+                        <div style={{ padding: '12px', color: 'var(--text-muted)' }}>No se encontraron clientes...</div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <button 
                   type="button" 
@@ -652,11 +702,22 @@ export default function NuevoProyectoPage() {
                     </h4>
                     <MediaCapture 
                       mode="audio" 
-                      onCapture={(blob, type, text) => {
+                      onCapture={async (blob, type, text) => {
                         setProjectData(prev => ({
                           ...prev,
                           technicalSpecs: { ...prev.technicalSpecs, description: (prev.technicalSpecs.description || '') + ' ' + text }
                         }))
+                        
+                        // Upload audio to gallery
+                        const formData = new FormData()
+                        formData.append('file', blob, 'nota_de_voz.webm')
+                        try {
+                          const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                          if (res.ok) {
+                            const data = await res.json()
+                            setUploadedFiles(prev => [...prev, data])
+                          }
+                        } catch (err) { console.error('Audio upload failed', err) }
                       }}
                     />
                   </div>
@@ -716,7 +777,9 @@ export default function NuevoProyectoPage() {
                 </div>
               </div>
               
-              <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Las fases organizan el trabajo en campo y permiten estructurar la bitácora de los operadores. Podrás añadir más después.</p>
+              <p style={{ color: 'var(--text)', opacity: 0.9, backgroundColor: 'var(--bg-surface)', padding: '10px 15px', borderRadius: '8px', borderLeft: '4px solid var(--primary)', marginBottom: '20px', fontSize: '0.95rem' }}>
+                Las fases organizan el trabajo en campo y permiten estructurar la bitácora de los operadores. Podrás añadir más después.
+              </p>
 
               {phases.map((phase, index) => (
                 <div key={phase.id} style={{ display: 'flex', gap: '15px', alignItems: 'flex-start', marginBottom: '20px', padding: '15px', backgroundColor: 'var(--bg-surface)', borderRadius: '8px', position: 'relative', border: '1px solid var(--border)' }}>
@@ -727,13 +790,50 @@ export default function NuevoProyectoPage() {
                     <input type="text" className="form-input mb-3" placeholder="Título de Fase (Ej. Excavación y Drenaje)" value={phase.title} onChange={e => updatePhase(index, 'title', e.target.value)} />
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }} className="mb-3">
                         <textarea className="form-input" rows={2} placeholder="Descripción teórica de los trabajos a realizar..." value={phase.description} onChange={e => updatePhase(index, 'description', e.target.value)} />
-                        <div style={{ width: '120px', flexShrink: 0 }}>
-                            <MediaCapture 
-                                mode="audio" 
-                                onCapture={(blob, type, text) => {
-                                    updatePhase(index, 'description', (phase.description || '') + ' ' + text)
-                                }}
-                            />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0, width: '130px', margin: '0 auto' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', fontWeight: 'bold' }}>Grabar Evidencia:</div>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                              <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                                <MediaCapture 
+                                    mode="audio" 
+                                    compact={true}
+                                    onCapture={async (blob, type, text) => {
+                                        updatePhase(index, 'description', (phase.description || '') + ' ' + text)
+                                        
+                                        // Upload audio for this phase to the project gallery
+                                        const formData = new FormData()
+                                        formData.append('file', blob, `fase_${index + 1}_audio.webm`)
+                                        try {
+                                          const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                                          if (res.ok) {
+                                            const data = await res.json()
+                                            setUploadedFiles(prev => [...prev, data])
+                                          }
+                                        } catch (err) { console.error('Phase audio upload failed', err) }
+                                    }}
+                                />
+                              </div>
+                              <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                                <MediaCapture 
+                                    mode="video"
+                                    compact={true}
+                                    onCapture={async (blob, type, text) => {
+                                        updatePhase(index, 'description', (phase.description || '') + ' ' + text)
+                                        
+                                        // Upload video for this phase to the project gallery
+                                        const formData = new FormData()
+                                        formData.append('file', blob, `fase_${index + 1}_video.webm`)
+                                        try {
+                                          const res = await fetch('/api/upload', { method: 'POST', body: formData })
+                                          if (res.ok) {
+                                            const data = await res.json()
+                                            setUploadedFiles(prev => [...prev, data])
+                                          }
+                                        } catch (err) { console.error('Fase Video upload failed', err) }
+                                    }}
+                                />
+                              </div>
+                            </div>
                         </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

@@ -2,8 +2,11 @@
 
 import { generateProfessionalPDF, numberToSpanishWords } from '@/lib/pdf-generator'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
+import { formatDateEcuador } from '@/lib/date-utils'
 
 export default function QuoteDetailClient({ quote }: any) {
+  const { data: session } = useSession()
   
   const handleDownloadPDF = () => {
     const clientInfo = {
@@ -35,7 +38,8 @@ export default function QuoteDetailClient({ quote }: any) {
     generateProfessionalPDF(clientInfo, items, totals, {
       docType: 'COTIZACIÓN',
       docId: quote.id,
-      notes: quote.notes
+      notes: quote.notes,
+      sellerName: session?.user?.name || quote.creator?.name || 'Aquatech'
     })
   }
 
@@ -90,7 +94,7 @@ export default function QuoteDetailClient({ quote }: any) {
               <div>
                 <div><strong>RUC/CI:</strong> {quote.clientRuc || quote.client?.ruc}</div>
                 <div><strong>Telef:</strong> {quote.clientPhone || quote.client?.phone}</div>
-                <div><strong>Fecha:</strong> {new Date(quote.createdAt).toLocaleDateString()}</div>
+                <div><strong>Fecha:</strong> {formatDateEcuador(quote.createdAt)}</div>
               </div>
             </div>
 

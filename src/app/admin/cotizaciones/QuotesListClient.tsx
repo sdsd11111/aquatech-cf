@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { formatDateEcuador } from '@/lib/date-utils'
 
 export default function QuotesListClient({ initialQuotes }: any) {
   const [quotes, setQuotes] = useState(initialQuotes)
@@ -52,7 +53,7 @@ export default function QuotesListClient({ initialQuotes }: any) {
               <tr key={quote.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <td style={{ padding: '15px' }}>{quote.client.name}</td>
                 <td style={{ padding: '15px', color: 'var(--text-muted)' }}>{quote.project?.title || 'Sin proyecto'}</td>
-                <td style={{ padding: '15px' }}>{new Date(quote.createdAt).toLocaleDateString()}</td>
+                <td style={{ padding: '15px' }}>{formatDateEcuador(quote.createdAt)}</td>
                 <td style={{ padding: '15px' }}>
                   <span className={`status-badge status-${quote.status.toLowerCase()}`}>
                     {quote.status}

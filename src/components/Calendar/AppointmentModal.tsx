@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getLocalNow, formatForDateTimeInput } from '@/lib/date-utils'
+import { getLocalNow, formatForDateTimeInput, forceEcuadorTZ } from '@/lib/date-utils'
 
 interface AppointmentModalProps {
   isOpen: boolean
@@ -72,16 +72,18 @@ export default function AppointmentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validar que fin > inicio
+    const start = new Date(formData.startTime)
+    const end = new Date(formData.endTime)
+    
+    if (end <= start) {
+      alert('Error: La fecha de fin debe ser posterior a la fecha de inicio.')
+      return
+    }
+
     setLoading(true)
     try {
-      // Forzar que la hora sea tomada como la zona de Ecuador (-05:00) si no tiene zona horaria
-      const forceEcuadorTZ = (dtStr: string) => {
-        if (!dtStr) return dtStr;
-        if (dtStr.includes('Z') || dtStr.includes('-0') || dtStr.includes('+')) return dtStr;
-        // dtStr fomrato normal es YYYY-MM-DDTHH:mm, le falta segundos y offset
-        return dtStr + ':00-05:00';
-      }
-
       await onSave({
         ...formData,
         startTime: forceEcuadorTZ(formData.startTime),

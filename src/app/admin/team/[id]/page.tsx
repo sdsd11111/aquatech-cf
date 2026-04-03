@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import CalendarView from '@/components/Calendar/CalendarView'
 import AppointmentModal from '@/components/Calendar/AppointmentModal'
+import { formatToEcuador, getLocalNow, formatTimeEcuador, formatDateEcuador, formatDateLongEcuador } from '@/lib/date-utils'
 
 // Inline SVG icons to avoid lucide-react webpack bundling issues
 const svgProps = (size: number, style?: React.CSSProperties, className?: string) => ({
@@ -49,6 +50,7 @@ export default function TeamMemberPage() {
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('PROYECTOS')
   const [monthFilter, setMonthFilter] = useState('ALL')
+  const [projectFilter, setProjectFilter] = useState('ALL')
 
   // Security States
   const [newPassword, setNewPassword] = useState('')
@@ -134,6 +136,27 @@ export default function TeamMemberPage() {
     })
     return Array.from(months).sort((a,b) => b.localeCompare(a))
   }, [activityData])
+  
+  const availableProjects = useMemo(() => {
+    if (!activityData?.timeline) return []
+    const projectsMap = new Map<string, string>()
+    
+    // First from current assigned projects
+    if (member?.projects) {
+      member.projects.forEach((p: any) => {
+        projectsMap.set(String(p.id), p.title)
+      })
+    }
+    
+    // Then from historical timeline (captures past/deleted involvements)
+    activityData.timeline.forEach((event: any) => {
+      if (event.projectId) {
+        projectsMap.set(String(event.projectId), event.projectTitle)
+      }
+    })
+    
+    return Array.from(projectsMap.entries()).map(([id, title]) => ({ id, title }))
+  }, [activityData, member])
 
   const filteredTimeline = useMemo(() => {
     if (!activityData?.timeline) return []
@@ -142,6 +165,7 @@ export default function TeamMemberPage() {
     if (activeTab === 'BITACORA') logs = logs.filter((l: any) => l.type === 'CHAT_MESSAGE' || l.type === 'PROJECT')
     if (activeTab === 'GASTOS') logs = logs.filter((l: any) => l.type === 'EXPENSE')
     if (activeTab === 'ENTRADA_SALIDA') logs = logs.filter((l: any) => l.type === 'ATTENDANCE')
+    // RESUMEN shows everything (no type filter)
 
     if (monthFilter !== 'ALL') {
       logs = logs.filter((l: any) => {
@@ -151,11 +175,13 @@ export default function TeamMemberPage() {
       })
     }
 
+    if (projectFilter !== 'ALL') {
+      logs = logs.filter((l: any) => String(l.projectId) === projectFilter)
+    }
+
     const groups: { [key: string]: any[] } = {}
     logs.forEach((event: any) => {
-      const dateKey = new Date(event.timestamp).toLocaleDateString('es-ES', {
-        day: 'numeric', month: 'long', year: 'numeric'
-      })
+      const dateKey = formatDateLongEcuador(event.timestamp)
       if (!groups[dateKey]) groups[dateKey] = []
       groups[dateKey].push(event)
     })
@@ -163,7 +189,7 @@ export default function TeamMemberPage() {
     return Object.entries(groups).sort((a, b) => {
         return new Date(b[1][0].timestamp).getTime() - new Date(a[1][0].timestamp).getTime()
     })
-  }, [activityData, activeTab, monthFilter])
+  }, [activityData, activeTab, monthFilter, projectFilter])
 
   const handlePasswordChange = async () => {
     if (!newPassword || newPassword.length < 4) {
@@ -454,21 +480,41 @@ export default function TeamMemberPage() {
                 'Registros de Entrada y Salida'}
             </h2>
             
-            {['BITACORA', 'GASTOS', 'ENTRADA_SALIDA'].includes(activeTab) && availableMonths.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Filtrar por Mes:</label>
-                <select 
-                  style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', backgroundColor: 'var(--bg-card)', color: 'var(--text)', fontSize: '0.9rem', outline: 'none' }}
-                  value={monthFilter} 
-                  onChange={e => setMonthFilter(e.target.value)}
-                >
-                  <option value="ALL">Todo el Historial</option>
-                  {availableMonths.map(m => {
-                    const [y, mo] = m.split('-')
-                    const label = new Date(Number(y), Number(mo)-1).toLocaleString('es-ES', { month: 'long', year: 'numeric' })
-                    return <option key={m} value={m}>{label.charAt(0).toUpperCase() + label.slice(1)}</option>
-                  })}
-                </select>
+            {['RESUMEN', 'BITACORA', 'GASTOS', 'ENTRADA_SALIDA'].includes(activeTab) && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                {/* Project Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Proyecto:</label>
+                  <select 
+                    style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', backgroundColor: 'var(--bg-card)', color: 'var(--text)', fontSize: '0.9rem', outline: 'none', maxWidth: '200px' }}
+                    value={projectFilter} 
+                    onChange={e => setProjectFilter(e.target.value)}
+                  >
+                    <option value="ALL">Todos los Proyectos</option>
+                    {availableProjects.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Month Filter */}
+                {availableMonths.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mes:</label>
+                    <select 
+                      style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', backgroundColor: 'var(--bg-card)', color: 'var(--text)', fontSize: '0.9rem', outline: 'none' }}
+                      value={monthFilter} 
+                      onChange={e => setMonthFilter(e.target.value)}
+                    >
+                      <option value="ALL">Todo el Historial</option>
+                      {availableMonths.map(m => {
+                        const [y, mo] = m.split('-')
+                        const label = new Date(Number(y), Number(mo)-1).toLocaleString('es-ES', { month: 'long', year: 'numeric' })
+                        return <option key={m} value={m}>{label.charAt(0).toUpperCase() + label.slice(1)}</option>
+                      })}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
         </div>
@@ -487,7 +533,7 @@ export default function TeamMemberPage() {
                     </span>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                         <Calendar size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }}/> 
-                        {new Date(proj.assignedAt).toLocaleDateString()}
+                        {formatDateEcuador(proj.assignedAt)}
                     </span>
                 </div>
               </div>
@@ -498,7 +544,7 @@ export default function TeamMemberPage() {
           </div>
         )}
 
-        {['BITACORA', 'GASTOS', 'ENTRADA_SALIDA'].includes(activeTab) && (
+        {['RESUMEN', 'BITACORA', 'GASTOS', 'ENTRADA_SALIDA'].includes(activeTab) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
             {filteredTimeline.length > 0 ? (
               filteredTimeline.map(([date, events]: any) => (
@@ -517,8 +563,7 @@ export default function TeamMemberPage() {
                                 {event.projectTitle}
                             </span>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                <Clock size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }}/>
-                                {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {formatTimeEcuador(event.timestamp)}
                             </span>
                         </div>
 
@@ -554,8 +599,8 @@ export default function TeamMemberPage() {
                                 <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.1, color: 'var(--success)' }}><Clock size={60} /></div>
                                 <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--success)', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '1px' }}>LOGÍSTICA: ENTRADA / LLEGADA</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                    <strong style={{ fontSize: '1.6rem', color: 'var(--text)' }}>{new Date(event.data.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{new Date(event.data.startTime).toLocaleDateString()}</div>
+                                    <strong style={{ fontSize: '1.6rem', color: 'var(--text)' }}>{formatTimeEcuador(event.data.startTime)}</strong>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatDateEcuador(event.data.startTime)}</div>
                                 </div>
                                 {event.data.startLat ? (
                                   <a href={`https://www.google.com/maps?q=${event.data.startLat},${event.data.startLng}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ marginTop: '12px', width: '100%', justifyContent: 'center', border: '1px solid var(--success)', color: 'var(--success)' }}>
@@ -568,8 +613,8 @@ export default function TeamMemberPage() {
                                 <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.1, color: 'var(--warning)' }}><Clock size={60} /></div>
                                 <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--warning)', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '1px' }}>LOGÍSTICA: SALIDA / RETIRO</span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                    <strong style={{ fontSize: '1.6rem', color: 'var(--text)' }}>{event.data.endTime ? new Date(event.data.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</strong>
-                                    {event.data.endTime && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{new Date(event.data.endTime).toLocaleDateString()}</div>}
+                                    <strong style={{ fontSize: '1.6rem', color: 'var(--text)' }}>{event.data.endTime ? formatTimeEcuador(event.data.endTime) : '--:--'}</strong>
+                                    {event.data.endTime && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{formatDateEcuador(event.data.endTime)}</div>}
                                 </div>
                                 {event.data.endLat ? (
                                   <a href={`https://www.google.com/maps?q=${event.data.endLat},${event.data.endLng}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ marginTop: '12px', width: '100%', justifyContent: 'center', border: '1px solid var(--warning)', color: 'var(--warning)' }}>

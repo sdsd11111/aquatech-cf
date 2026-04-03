@@ -21,16 +21,16 @@ model User {
   image            String?           @db.LongText
   sessionVersion   Int               @default(1) @map("session_version")
   displayPassword  String?           @map("display_password") @db.VarChar(255)
+  appointments     Appointment[]
   blogPosts        BlogPost[]        @relation("BlogPostAuthor")
   chatMessages     ChatMessage[]
+  contentPipelines ContentPipeline[]
   dayRecords       DayRecord[]
   expenses         Expense[]
   phaseCompletions PhaseCompletion[]
   projectTeams     ProjectTeam[]
   createdProjects  Project[]         @relation("ProjectCreator")
   createdQuotes    Quote[]           @relation("QuoteCreator")
-  appointments     Appointment[]
-  contentPipelines ContentPipeline[]
 
   @@map("users")
 }
@@ -74,6 +74,7 @@ model Project {
   specsAudioUrl      String?              @map("specs_audio_url") @db.VarChar(500)
   specsTranscription String?              @map("specs_transcription") @db.Text
   createdBy          Int?                 @map("created_by")
+  appointments       Appointment[]
   budgetItems        BudgetItem[]
   chatMessages       ChatMessage[]
   dayRecords         DayRecord[]
@@ -84,7 +85,6 @@ model Project {
   client             Client?              @relation(fields: [clientId], references: [id])
   creator            User?                @relation("ProjectCreator", fields: [createdBy], references: [id])
   quotes             Quote[]
-  appointments       Appointment[]
 
   @@index([status])
   @@index([clientId])
@@ -147,10 +147,10 @@ model Expense {
   category    ExpenseCategory?
   receiptUrl  String?          @map("receipt_url") @db.VarChar(500)
   date        DateTime
-  isNote      Boolean          @default(false) @map("is_note")
   createdAt   DateTime         @default(now()) @map("created_at")
   lat         Decimal?         @db.Decimal(10, 7)
   lng         Decimal?         @db.Decimal(10, 7)
+  isNote      Boolean          @default(false) @map("is_note")
   project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User             @relation(fields: [userId], references: [id])
 
@@ -373,7 +373,179 @@ model BlogPostTag {
   @@map("blog_post_tags")
 }
 
+model Appointment {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  description String?  @db.Text
+  startTime   DateTime @map("start_time")
+  endTime     DateTime @map("end_time")
+  status      String   @default("PENDIENTE") @db.VarChar(50)
+  userId      Int      @map("user_id")
+  projectId   Int?     @map("project_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  project     Project? @relation(fields: [projectId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([projectId])
+  @@map("appointments")
+}
+
+model BrandConfig {
+  id              Int      @id @default(autoincrement())
+  name            String   @db.VarChar(100)
+  imagePrompt     String   @db.LongText
+  brandColors     String?  @db.Text
+  typography      String?  @db.VarChar(255)
+  logoUrl         String?  @map("logo_url") @db.VarChar(500)
+  additionalNotes String?  @map("additional_notes") @db.Text
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("brand_configs")
+}
+
+model ContentPipeline {
+  id              Int               @id @default(autoincrement())
+  idea            String            @db.Text
+  ideaContext     String?           @db.LongText
+  status          PipelineStatus    @default(IDEA)
+  weekNumber      Int?              @map("week_number")
+  year            Int?
+  createdById     Int               @map("created_by_id")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  createdBy       User              @relation(fields: [createdById], references: [id])
+  headlineOptions HeadlineOption[]
+  articles        PipelineArticle[]
+  socialPosts     SocialPost[]
+
+  @@index([createdById], map: "content_pipelines_created_by_id_fkey")
+  @@map("content_pipelines")
+}
+
+model HeadlineOption {
+  id         Int             @id @default(autoincrement())
+  pipelineId Int             @map("pipeline_id")
+  headline   String          @db.VarChar(500)
+  keyword    String?         @db.VarChar(255)
+  isSelected Boolean         @default(false) @map("is_selected")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  pipeline   ContentPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineId])
+  @@map("headline_options")
+}
+
+model PipelineArticle {
+  id              Int                @id @default(autoincrement())
+  pipelineId      Int                @map("pipeline_id")
+  type            ArticleType        @default(CLUSTER)
+  title           String             @db.VarChar(500)
+  slug            String?            @db.VarChar(500)
+  content         String?            @db.LongText
+  excerpt         String?            @db.Text
+  metaDescription String?            @map("meta_description") @db.VarChar(500)
+  focusKeyword    String?            @map("focus_keyword") @db.VarChar(255)
+  status          ArticleStatus      @default(DRAFT)
+  feedback        String?            @db.Text
+  blogPostId      Int?               @unique @map("blog_post_id")
+  displayOrder    Int                @default(0) @map("display_order")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  images          ArticleImage[]
+  interlinks      ArticleInterlink[] @relation("SourceArticle")
+  incomingLinks   ArticleInterlink[] @relation("TargetArticle")
+  blogPost        BlogPost?          @relation(fields: [blogPostId], references: [id])
+  pipeline        ContentPipeline    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  socialPosts     SocialPost[]
+
+  @@index([pipelineId])
+  @@map("pipeline_articles")
+}
+
+model ArticleImage {
+  id         Int             @id @default(autoincrement())
+  articleId  Int             @map("article_id")
+  imageUrl   String          @map("image_url") @db.VarChar(500)
+  prompt     String?         @db.Text
+  isSelected Boolean         @default(false) @map("is_selected")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  article    PipelineArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId])
+  @@map("article_images")
+}
+
+model ArticleInterlink {
+  id              Int             @id @default(autoincrement())
+  sourceArticleId Int             @map("source_article_id")
+  targetArticleId Int             @map("target_article_id")
+  anchorText      String          @map("anchor_text") @db.VarChar(255)
+  linkType        InterlinkType   @default(CLUSTER_TO_PILLAR) @map("link_type")
+  sourceArticle   PipelineArticle @relation("SourceArticle", fields: [sourceArticleId], references: [id], onDelete: Cascade)
+  targetArticle   PipelineArticle @relation("TargetArticle", fields: [targetArticleId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceArticleId, targetArticleId])
+  @@index([targetArticleId], map: "article_interlinks_target_article_id_fkey")
+  @@map("article_interlinks")
+}
+
+model SocialPost {
+  id          Int                 @id @default(autoincrement())
+  pipelineId  Int                 @map("pipeline_id")
+  articleId   Int?                @map("article_id")
+  type        SocialPostType
+  status      SocialPostStatus    @default(DRAFT)
+  scheduledAt DateTime?           @map("scheduled_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  variants    SocialPostVariant[]
+  article     PipelineArticle?    @relation(fields: [articleId], references: [id])
+  pipeline    ContentPipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineId])
+  @@index([articleId])
+  @@index([scheduledAt])
+  @@map("social_posts")
+}
+
+model SocialPostVariant {
+  id          Int               @id @default(autoincrement())
+  postId      Int               @map("post_id")
+  platform    SocialPlatform
+  caption     String?           @db.LongText
+  hashtags    String?           @db.Text
+  articleLink String?           @map("article_link") @db.VarChar(500)
+  metaPostId  String?           @map("meta_post_id") @db.VarChar(255)
+  status      SocialPostStatus  @default(DRAFT)
+  isCarousel  Boolean           @default(false) @map("is_carousel")
+  publishedAt DateTime?         @map("published_at")
+  images      SocialPostImage[]
+  post        SocialPost        @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, platform])
+  @@index([postId])
+  @@map("social_post_variants")
+}
+
+model SocialPostImage {
+  id         Int               @id @default(autoincrement())
+  variantId  Int               @map("variant_id")
+  imageUrl   String            @map("image_url") @db.VarChar(500)
+  prompt     String?           @db.Text
+  isSelected Boolean           @default(false) @map("is_selected")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  variant    SocialPostVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+  @@map("social_post_images")
+}
+
 enum UserRole {
+  SUPERADMIN
   ADMIN
   ADMINISTRADORA
   OPERATOR
@@ -400,6 +572,7 @@ enum ProjectStatus {
   PENDIENTE
   COMPLETADO
   CANCELADO
+  ARCHIVADO
 }
 
 enum PhaseStatus {
@@ -436,224 +609,6 @@ enum MessageType {
   PHASE_COMPLETE
   DOCUMENT
 }
-
-model Appointment {
-  id          Int      @id @default(autoincrement())
-  title       String   @db.VarChar(255)
-  description String?  @db.Text
-  startTime   DateTime @map("start_time")
-  endTime     DateTime @map("end_time")
-  status      String   @default("PENDIENTE") @db.VarChar(50)
-  userId      Int      @map("user_id")
-  projectId   Int?     @map("project_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  user    User     @relation(fields: [userId], references: [id])
-  project Project? @relation(fields: [projectId], references: [id])
-
-  @@index([userId])
-  @@index([projectId])
-  @@map("appointments")
-}
-
-// ═══════════════════════════════════════════
-// BRAND CONFIG - Super Prompt de Marca
-// ═══════════════════════════════════════════
-
-model BrandConfig {
-  id              Int      @id @default(autoincrement())
-  name            String   @db.VarChar(100) // "Aquatech Principal"
-  imagePrompt     String   @db.LongText // Super prompt para imágenes
-  brandColors     String?  @db.Text // JSON: ["#0891b2", "#ffffff", ...]
-  typography      String?  @db.VarChar(255) // "Raleway, Montserrat"
-  logoUrl         String?  @map("logo_url") @db.VarChar(500)
-  additionalNotes String?  @map("additional_notes") @db.Text // Notas extra de estilo
-  isActive        Boolean  @default(true) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  @@map("brand_configs")
-}
-
-// ═══════════════════════════════════════════
-// CONTENT PIPELINE
-// ═══════════════════════════════════════════
-
-model ContentPipeline {
-  id          Int            @id @default(autoincrement())
-  idea        String         @db.Text
-  ideaContext String?        @db.LongText
-  status      PipelineStatus @default(IDEA)
-  weekNumber  Int?           @map("week_number")
-  year        Int?
-  createdById Int            @map("created_by_id")
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
-
-  createdBy       User              @relation(fields: [createdById], references: [id])
-  headlineOptions HeadlineOption[]
-  articles        PipelineArticle[]
-  socialPosts     SocialPost[]
-
-  @@map("content_pipelines")
-}
-
-// ═══════════════════════════════════════════
-// HEADLINES - Opciones de H1
-// ═══════════════════════════════════════════
-
-model HeadlineOption {
-  id         Int      @id @default(autoincrement())
-  pipelineId Int      @map("pipeline_id")
-  headline   String   @db.VarChar(500)
-  keyword    String?  @db.VarChar(255) // Keyword principal sugerida
-  isSelected Boolean  @default(false) @map("is_selected")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  pipeline ContentPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-
-  @@index([pipelineId])
-  @@map("headline_options")
-}
-
-// ═══════════════════════════════════════════
-// PIPELINE ARTICLES - Pilar + Clusters
-// ═══════════════════════════════════════════
-
-model PipelineArticle {
-  id              Int           @id @default(autoincrement())
-  pipelineId      Int           @map("pipeline_id")
-  type            ArticleType   @default(CLUSTER)
-  title           String        @db.VarChar(500)
-  slug            String?       @db.VarChar(500)
-  content         String?       @db.LongText
-  excerpt         String?       @db.Text
-  metaDescription String?       @map("meta_description") @db.VarChar(500)
-  focusKeyword    String?       @map("focus_keyword") @db.VarChar(255)
-  status          ArticleStatus @default(DRAFT)
-  feedback        String?       @db.Text
-  blogPostId      Int?          @unique @map("blog_post_id")
-  displayOrder    Int           @default(0) @map("display_order")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-
-  pipeline      ContentPipeline    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  blogPost      BlogPost?          @relation(fields: [blogPostId], references: [id])
-  images        ArticleImage[]
-  interlinks    ArticleInterlink[] @relation("SourceArticle")
-  incomingLinks ArticleInterlink[] @relation("TargetArticle")
-  socialPosts   SocialPost[]
-
-  @@index([pipelineId])
-  @@map("pipeline_articles")
-}
-
-// ═══════════════════════════════════════════
-// ARTICLE IMAGES - 2 opciones por artículo
-// ═══════════════════════════════════════════
-
-model ArticleImage {
-  id         Int      @id @default(autoincrement())
-  articleId  Int      @map("article_id")
-  imageUrl   String   @map("image_url") @db.VarChar(500)
-  prompt     String?  @db.Text
-  isSelected Boolean  @default(false) @map("is_selected")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  article PipelineArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
-
-  @@index([articleId])
-  @@map("article_images")
-}
-
-// ═══════════════════════════════════════════
-// INTERLINKS - Pirámide SEO
-// ═══════════════════════════════════════════
-
-model ArticleInterlink {
-  id              Int           @id @default(autoincrement())
-  sourceArticleId Int           @map("source_article_id")
-  targetArticleId Int           @map("target_article_id")
-  anchorText      String        @map("anchor_text") @db.VarChar(255)
-  linkType        InterlinkType @default(CLUSTER_TO_PILLAR) @map("link_type")
-
-  sourceArticle PipelineArticle @relation("SourceArticle", fields: [sourceArticleId], references: [id], onDelete: Cascade)
-  targetArticle PipelineArticle @relation("TargetArticle", fields: [targetArticleId], references: [id], onDelete: Cascade)
-
-  @@unique([sourceArticleId, targetArticleId])
-  @@map("article_interlinks")
-}
-
-// ═══════════════════════════════════════════
-// SOCIAL POSTS - Post maestro
-// ═══════════════════════════════════════════
-
-model SocialPost {
-  id          Int              @id @default(autoincrement())
-  pipelineId  Int              @map("pipeline_id")
-  articleId   Int?             @map("article_id")
-  type        SocialPostType
-  status      SocialPostStatus @default(DRAFT)
-  scheduledAt DateTime?        @map("scheduled_at")
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-
-  pipeline ContentPipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  article  PipelineArticle?    @relation(fields: [articleId], references: [id])
-  variants SocialPostVariant[]
-
-  @@index([pipelineId])
-  @@index([articleId])
-  @@index([scheduledAt])
-  @@map("social_posts")
-}
-
-// ═══════════════════════════════════════════
-// SOCIAL POST VARIANT - Contenido por red social
-// ═══════════════════════════════════════════
-
-model SocialPostVariant {
-  id          Int              @id @default(autoincrement())
-  postId      Int              @map("post_id")
-  platform    SocialPlatform // FACEBOOK o INSTAGRAM
-  caption     String?          @db.LongText
-  hashtags    String?          @db.Text
-  articleLink String?          @map("article_link") @db.VarChar(500)
-  metaPostId  String?          @map("meta_post_id") @db.VarChar(255)
-  status      SocialPostStatus @default(DRAFT)
-  isCarousel  Boolean          @default(false) @map("is_carousel")
-  publishedAt DateTime?        @map("published_at")
-
-  post   SocialPost        @relation(fields: [postId], references: [id], onDelete: Cascade)
-  images SocialPostImage[]
-
-  @@unique([postId, platform])
-  @@index([postId])
-  @@map("social_post_variants")
-}
-
-// ═══════════════════════════════════════════
-// SOCIAL POST IMAGES - 2 opciones por variante
-// ═══════════════════════════════════════════
-
-model SocialPostImage {
-  id         Int      @id @default(autoincrement())
-  variantId  Int      @map("variant_id")
-  imageUrl   String   @map("image_url") @db.VarChar(500)
-  prompt     String?  @db.Text
-  isSelected Boolean  @default(false) @map("is_selected")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  variant SocialPostVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-
-  @@index([variantId])
-  @@map("social_post_images")
-}
-
-// ═══════════════════════════════════════════
-// ENUMS
-// ═══════════════════════════════════════════
 
 enum PipelineStatus {
   IDEA

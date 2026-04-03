@@ -94,12 +94,30 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
     media: msg.media
   }))
 
+  // Combine direct gallery uploads and chat media into a unified gallery
+  const unifiedGallery = [
+    ...(project.gallery || []),
+    ...(chatMessages.flatMap((m: any) => m.media || []).map((m: any) => ({
+      ...m,
+      isFromChat: true
+    })))
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
   const safeRecord = activeDayRecord ? { id: activeDayRecord.id, startTime: activeDayRecord.startTime.toISOString() } : null
 
   return (
     <div className="p-0 sm:p-6 pb-24">
       <ProjectExecutionClient 
-        project={safeProject} 
+        project={{
+          ...safeProject,
+          gallery: unifiedGallery.map(g => ({ 
+            id: g.id, 
+            url: g.url, 
+            filename: g.filename, 
+            mimeType: g.mimeType,
+            isFromChat: (g as any).isFromChat
+          }))
+        }} 
         initialChat={safeChat} 
         activeRecord={safeRecord}
         expenses={myExpenses.map(e => ({ 
@@ -107,7 +125,8 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
           description: e.description, 
           amount: Number(e.amount), 
           date: e.date.toISOString(),
-          isNote: e.isNote 
+          isNote: e.isNote,
+          userName: (e as any).user?.name || 'Subcontratista'
         }))}
         userId={userId}
         clientName={project.client?.name || 'Cliente sin nombre'}

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { Metadata } from 'next';
 import { BlogSearch } from '@/components/blog/BlogSearch';
+import { formatDateEcuador } from '@/lib/date-utils';
 
 export const metadata: Metadata = {
   title: 'Blog | Aquatech',
@@ -117,7 +118,7 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
                         {post.author?.name || 'Administrador'}
                       </span>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : ''}
+                        {post.publishedAt ? formatDateEcuador(post.publishedAt) : ''}
                       </span>
                     </div>
                   </div>

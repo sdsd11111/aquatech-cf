@@ -15,7 +15,7 @@ export default async function OperatorDashboard() {
   }
 
   // Redirect admins to their dashboard
-  if (session.user.role === 'ADMIN') {
+  if (session.user.role === 'ADMIN' || session.user.role === 'ADMINISTRADORA' || session.user.role === 'SUPERADMIN') {
     redirect('/admin')
   }
 

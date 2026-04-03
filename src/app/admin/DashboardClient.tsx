@@ -77,6 +77,7 @@ const statusBadge: Record<string, { className: string; label: string }> = {
   PENDIENTE: { className: 'badge badge-warning badge-dot', label: 'Pendiente' },
   COMPLETADO: { className: 'badge badge-neutral badge-dot', label: 'Completado' },
   CANCELADO: { className: 'badge badge-danger badge-dot', label: 'Cancelado' },
+  ARCHIVADO: { className: 'badge badge-neutral badge-dot', label: 'Archivado' },
 }
 
 const msgTypeIcons: Record<string, string> = {

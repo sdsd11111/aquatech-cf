@@ -2,14 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 
 export default function TeamPage() {
+  const { data: session } = useSession()
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [error, setError] = useState('')
   
+  const currentUserRole = (session?.user as any)?.role
+  const isSuperAdmin = currentUserRole === 'SUPERADMIN'
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -88,7 +92,14 @@ export default function TeamPage() {
   if (loading) return <div className="p-10 text-center">Cargando equipo...</div>
 
   // Filter groups
-  const admins = users.filter(u => u.role === 'ADMIN' || u.role === 'ADMINISTRADORA')
+  // Only SuperAdmin sees other SuperAdmins (API also filters this, but safeguard here)
+  const management = users.filter(u => 
+    u.role === 'SUPERADMIN' || u.role === 'ADMIN' || u.role === 'ADMINISTRADORA'
+  ).sort((a, b) => {
+    if (a.role === 'SUPERADMIN' && b.role !== 'SUPERADMIN') return -1
+    if (a.role !== 'SUPERADMIN' && b.role === 'SUPERADMIN') return 1
+    return 0
+  })
   const operators = users.filter(u => u.role === 'OPERATOR')
   const subcontratistas = users.filter(u => u.role === 'SUBCONTRATISTA')
 
@@ -117,18 +128,20 @@ export default function TeamPage() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
-        {/* Admins */}
-        <div>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontWeight: '700', opacity: 0.9 }}>
-            <span style={{ width: '4px', height: '16px', backgroundColor: 'var(--success)', borderRadius: '2px' }} />
-            Administración
-          </h3>
-          <div className="grid-responsive">
-            {admins.map(u => (
-              <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} />
-            ))}
+        {/* Management (Admins & Superadmin) */}
+        {management.length > 0 && (
+          <div>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text)', fontWeight: '700', opacity: 0.9 }}>
+              <span style={{ width: '4px', height: '16px', backgroundColor: 'var(--success)', borderRadius: '2px' }} />
+              Administración
+            </h3>
+            <div className="grid-responsive">
+              {management.map(u => (
+                <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} />
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Operators */}
         <div>
@@ -138,7 +151,7 @@ export default function TeamPage() {
           </h3>
           <div className="grid-responsive">
             {operators.map(u => (
-              <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} />
+              <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} />
             ))}
             {operators.length === 0 && (
               <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-deep)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
@@ -156,7 +169,7 @@ export default function TeamPage() {
           </h3>
           <div className="grid-responsive">
             {subcontratistas.map(u => (
-              <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} />
+              <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} />
             ))}
             {subcontratistas.length === 0 && (
               <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-deep)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
@@ -249,7 +262,13 @@ export default function TeamPage() {
                 <select className="form-input" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                   <option value="OPERATOR">Operador (Campo)</option>
                   <option value="SUBCONTRATISTA">Subcontratista</option>
-                  <option value="ADMINISTRADORA">Administradora (Oficina)</option>
+                  {isSuperAdmin && (
+                    <>
+                      <option value="ADMINISTRADORA">Administradora (Oficina)</option>
+                      <option value="ADMIN">Administrador (Gestión)</option>
+                      <option value="SUPERADMIN">Super Administrador</option>
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -284,19 +303,34 @@ export default function TeamPage() {
   )
 }
 
-function UserCard({ user, onDelete, formatDate }: { user: any, onDelete: (id: number) => void, formatDate: (d: any) => string }) {
-  const statusColor = user.role === 'ADMIN' ? 'var(--success)' : (user.role === 'ADMINISTRADORA' ? 'var(--info)' : (user.role === 'SUBCONTRATISTA' ? 'var(--warning)' : 'var(--primary)'))
+function UserCard({ user, onDelete, formatDate, currentUserRole }: { user: any, onDelete: (id: number) => void, formatDate: (d: any) => string, currentUserRole: string }) {
+  const isSuperAdminUser = user.role === 'SUPERADMIN'
+  const isCurrentUserSuperAdmin = currentUserRole === 'SUPERADMIN'
+
+  // Colors based on role
+  const statusColor = 
+    isSuperAdminUser ? '#F59E0B' : // Gold for SuperAdmin
+    user.role === 'ADMIN' ? 'var(--success)' : 
+    user.role === 'ADMINISTRADORA' ? 'var(--info)' : 
+    user.role === 'SUBCONTRATISTA' ? 'var(--warning)' : 
+    'var(--primary)'
   
+  // Can delete if: 
+  // 1. Current user is SuperAdmin
+  // 2. OR user to delete is NOT a SuperAdmin
+  const canDelete = isCurrentUserSuperAdmin || (!isSuperAdminUser)
+
   return (
     <Link 
       href={`/admin/team/${user.id}`}
       className="card h-full p-0 overflow-hidden" style={{ 
       display: 'block', textDecoration: 'none',
       borderRadius: '24px', 
-      border: '1px solid var(--border-color)',
+      border: isSuperAdminUser ? `2px solid ${statusColor}40` : '1px solid var(--border-color)',
       minHeight: '340px',
       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      position: 'relative'
+      position: 'relative',
+      boxShadow: isSuperAdminUser ? `0 20px 40px ${statusColor}10` : 'none'
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '24px' }}>
         {/* Background Accent Gradient */}
@@ -318,9 +352,16 @@ function UserCard({ user, onDelete, formatDate }: { user: any, onDelete: (id: nu
                   backgroundColor: `${statusColor}15`,
                   color: statusColor,
                   textTransform: 'uppercase',
-                  letterSpacing: '0.1em'
+                  letterSpacing: '0.1em',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
               }}>
-                {user.role === 'ADMIN' ? 'Super Administrador' : 
+                {isSuperAdminUser && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+                )}
+                {user.role === 'SUPERADMIN' ? 'Super Administrador' : 
+                 user.role === 'ADMIN' ? 'Administrador' : 
                  user.role === 'ADMINISTRADORA' ? 'Administradora' : 
                  user.role === 'SUBCONTRATISTA' ? 'Subcontratista' : 'Operador'}
               </div>
@@ -380,27 +421,29 @@ function UserCard({ user, onDelete, formatDate }: { user: any, onDelete: (id: nu
               </div>
             </div>
             
-            <button 
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(user.id); }}
-              className="btn-icon"
-              style={{ 
-                  background: 'rgba(239, 68, 68, 0.05)', 
-                  border: 'none', 
-                  color: 'var(--danger)', 
-                  cursor: 'pointer',
-                  padding: '10px', 
-                  borderRadius: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  transition: 'all 0.2s',
-                  zIndex: 10
-              }}
-              title="Eliminar Miembro"
-              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
-              onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)'}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
+            {canDelete && (
+              <button 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(user.id); }}
+                className="btn-icon"
+                style={{ 
+                    background: 'rgba(239, 68, 68, 0.05)', 
+                    border: 'none', 
+                    color: 'var(--danger)', 
+                    cursor: 'pointer',
+                    padding: '10px', 
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'all 0.2s',
+                    zIndex: 10
+                }}
+                title="Eliminar Miembro"
+                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)'}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            )}
           </div>
         </div>
       </div>

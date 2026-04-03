@@ -8,7 +8,7 @@ export type Role = 'ADMIN' | 'ADMINISTRADORA' | 'OPERATOR' | 'SUBCONTRATISTA'
 export function isAdmin(role?: string | null): boolean {
   if (!role) return false
   const r = role.toUpperCase()
-  return r === 'ADMIN' || r === 'ADMINISTRADORA' || r === 'ADMINISTRADOR'
+  return r === 'ADMIN' || r === 'ADMINISTRADORA' || r === 'ADMINISTRADOR' || r === 'SUPERADMIN'
 }
 
 /**

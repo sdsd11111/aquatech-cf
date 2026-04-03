@@ -62,6 +62,7 @@ export async function GET(
       timeline.push({
         type: 'CHAT_MESSAGE',
         timestamp: msg.createdAt,
+        projectId: msg.projectId,
         projectTitle: msg.project.title,
         data: msg
       })
@@ -71,6 +72,7 @@ export async function GET(
       timeline.push({
         type: 'EXPENSE',
         timestamp: exp.date,
+        projectId: exp.projectId,
         projectTitle: exp.project.title,
         data: exp
       })
@@ -80,6 +82,7 @@ export async function GET(
       timeline.push({
         type: 'ATTENDANCE',
         timestamp: rec.startTime,
+        projectId: rec.projectId,
         projectTitle: rec.project.title,
         data: rec
       })
@@ -89,6 +92,7 @@ export async function GET(
       timeline.push({
         type: 'PROJECT',
         timestamp: proj.createdAt,
+        projectId: proj.id,
         projectTitle: proj.title,
         data: proj
       })
@@ -98,6 +102,7 @@ export async function GET(
       timeline.push({
         type: 'QUOTE',
         timestamp: quote.createdAt,
+        projectId: quote.projectId,
         projectTitle: `Cotización #${quote.id}`,
         data: quote
       })

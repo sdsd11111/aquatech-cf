@@ -1,6 +1,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { prisma as db } from '@/lib/prisma'
+import { formatDateEcuador } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,7 +69,7 @@ export default async function ContentPipelinesPage() {
                     {pipeline.idea}
                   </h4>
                   <div style={{ display: 'flex', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                    <span>Creado el {new Date(pipeline.createdAt).toLocaleDateString()}</span>
+                    <span>Creado el {formatDateEcuador(pipeline.createdAt)}</span>
                     <span>Estado: <span className="badge" style={{ background: 'var(--primary-color)', color: 'white', borderRadius: '4px', padding: '0.2rem 0.5rem' }}>{pipeline.status}</span></span>
                     <span>Autor: {pipeline.createdBy?.name || 'Usuario'}</span>
                   </div>

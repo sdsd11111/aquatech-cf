@@ -14,9 +14,8 @@ export const authOptions: AuthOptions = {
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) return null
 
-        const usernameInput = credentials.username.trim()
-        const password = credentials.password
-
+        const usernameInput = (credentials?.username || '').trim()
+        const password = credentials?.password || ''
 
         const user = await prisma.user.findFirst({
           where: { 

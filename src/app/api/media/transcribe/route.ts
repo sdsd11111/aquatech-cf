@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
 
     // Prepare Groq request
     const groqFormData = new FormData()
-    groqFormData.append('file', file, (file as any).name || 'audio.webm')
+    // Forzamos el MIME type a audio/webm y un nombre estándar para que la API de Groq no rechace content-types de video
+    const audioContent = new File([file], 'audio.webm', { type: 'audio/webm' })
+    groqFormData.append('file', audioContent)
     groqFormData.append('model', model)
     groqFormData.append('language', 'es') // Spanish as default
 

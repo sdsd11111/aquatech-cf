@@ -140,6 +140,7 @@ export interface PDFConfig {
   docId: string | number;
   notes?: string;
   action?: 'save' | 'preview';
+  sellerName?: string;
 }
 
 export function generateProfessionalPDF(
@@ -359,7 +360,18 @@ export function generateProfessionalPDF(
   doc.setFont('helvetica', 'bold');
   doc.text('**Gracias por preferirnos**', 105, sigY + 14, { align: 'center' });
 
-  const fileName = `${config.docType}_Aquatech_${config.docId}.pdf`;
+  // --- 6. FILENAME LOGIC ---
+  const sanitize = (text: string) => text.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_');
+  
+  const rawClientName = client.name || '';
+  const isCF = !rawClientName || 
+               rawClientName.toUpperCase().includes('CONSUMIDOR FINAL') || 
+               rawClientName.toUpperCase().includes('CLIENTE PARTICULAR');
+               
+  const clientPrefix = isCF ? 'CF' : sanitize(rawClientName);
+  const sellerSuffix = sanitize(config.sellerName || 'AQUATECH');
+  
+  const fileName = `${clientPrefix}_${sellerSuffix}.pdf`;
 
   if (config.action === 'preview') {
     const blobUrl = doc.output('bloburl');

@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { formatTimeEcuador } from '@/lib/date-utils'
+import { isAdmin as checkIsAdmin } from '@/lib/rbac'
 
 export async function GET(request: Request) {
   try {
@@ -16,7 +18,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const isAdmin = (session.user as any).role === 'ADMIN' || (session.user as any).role === 'ADMINISTRADORA'
+    const isAdmin = checkIsAdmin((session.user as any).role)
     const where: any = {}
     
     // If Admin and userId is "all" or not provided, show all.
@@ -66,10 +68,16 @@ export async function POST(request: Request) {
 
     // Logic: Only Admins can assign to others. Operators can only create for themselves?
     // For now, let's allow it if it's the user's ID or if they are admin.
-    const isAdmin = (session.user as any).role === 'ADMIN' || (session.user as any).role === 'ADMINISTRADORA'
+    const isAdmin = checkIsAdmin((session.user as any).role)
     
     if (!isAdmin && Number(userId) !== Number(session.user.id)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const start = new Date(startTime)
+    const end = new Date(endTime)
+    if (end <= start) {
+      return NextResponse.json({ error: 'La fecha de fin debe ser posterior a la de inicio' }, { status: 400 })
     }
 
     const appointment = await prisma.appointment.create({
@@ -89,11 +97,7 @@ export async function POST(request: Request) {
 
     // NOTIFICACIÓN AUTOMÁTICA: Si hay un número de teléfono, enviar aviso de nueva tarea
     if (appointment.user?.phone) {
-      const startTimeLocale = new Date(startTime).toLocaleTimeString('es-EC', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: true 
-      });
+      const startTimeLocale = formatTimeEcuador(startTime);
       
       const message = `*Notificación Aquatech*\n\nHola ${appointment.user.name}, tienes una *nueva tarea* asignada para hoy/próximamente:\n📌 *${title}*\n⏰ Hora: ${startTimeLocale}\n\nConsulta más detalles en tu perfil.`;
       

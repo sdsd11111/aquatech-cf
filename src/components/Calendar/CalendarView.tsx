@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { getLocalNow, formatToEcuador } from '@/lib/date-utils'
+import { getLocalNow, formatToEcuador, formatTimeEcuador, formatDateEcuador } from '@/lib/date-utils'
 
 // Inline SVG icons to match project pattern and avoid lucide-react issues
 const svgProps = (size: number, style?: React.CSSProperties, className?: string) => ({
@@ -100,7 +100,7 @@ export default function CalendarView({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <h2 style={{ margin: 0, textTransform: 'capitalize', fontSize: '1.25rem', color: 'var(--text)' }}>
-            {viewMode === 'MONTH' ? monthName : `Semana de ${weekDays[0].toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`}
+            {viewMode === 'MONTH' ? monthName : `Semana de ${formatToEcuador(weekDays[0], { day: 'numeric', month: 'short' })}`}
           </h2>
           <div style={{ display: 'flex', gap: '4px' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('PREV')}><ChevronLeft size={18}/></button>
@@ -213,7 +213,7 @@ export default function CalendarView({
                   >
                     <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</div>
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                        {formatToEcuador(event.startTime, { hour: '2-digit', minute: '2-digit' })}
+                        {formatTimeEcuador(event.startTime)}
                     </div>
                   </button>
                 ))}

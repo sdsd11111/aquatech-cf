@@ -1,11 +1,13 @@
 import React from 'react'
 import { prisma as db } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import HeadlineSelector from '@/components/marketing/HeadlineSelector'
 // Importaremos más componentes según la fase (DualEditor, ClusterSelector)
 
-export default async function PipelineDetailPage({ params }: { params: { id: string } }) {
-  const pipelineId = parseInt(params.id)
+export default async function PipelineDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  const pipelineId = parseInt(resolvedParams.id)
   
   if (isNaN(pipelineId)) {
     notFound()
@@ -30,6 +32,18 @@ export default async function PipelineDetailPage({ params }: { params: { id: str
   return (
     <div className="pipeline-detail-page" style={{ maxWidth: '1000px', margin: '0 auto', padding: '2rem' }}>
       
+      <Link 
+        href="/admin/marketing/content" 
+        className="btn btn-outline-secondary mb-4"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', textDecoration: 'none', color: 'var(--text-color)' }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Volver a la Lista
+      </Link>
+
       {/* Header */}
       <div className="card shadow-sm p-4 mb-4" style={{ background: 'var(--card-bg)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

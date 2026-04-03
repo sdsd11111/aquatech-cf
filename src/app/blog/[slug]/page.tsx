@@ -4,6 +4,7 @@ import MarkdownRenderer from '@/components/blog/MarkdownRenderer';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import Link from 'next/link';
+import { formatDateLongEcuador } from '@/lib/date-utils';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -89,7 +90,7 @@ export default async function BlogPostPage({ params }: Props) {
               </div>
               <span>•</span>
               <time dateTime={post.publishedAt?.toISOString() || ''}>
-                {post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Reciente'}
+                {post.publishedAt ? formatDateLongEcuador(post.publishedAt) : 'Reciente'}
               </time>
             </div>
           </header>

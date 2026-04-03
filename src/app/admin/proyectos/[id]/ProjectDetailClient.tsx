@@ -6,17 +6,38 @@ import autoTable from 'jspdf-autotable'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import ProjectUploader, { ProjectFile } from '@/components/ProjectUploader'
-import { formatToEcuador, ECUADOR_TIMEZONE } from '@/lib/date-utils'
+import { formatToEcuador, ECUADOR_TIMEZONE, getLocalNow, formatDateEcuador, formatTimeEcuador } from '@/lib/date-utils'
+import MediaCapture from '@/components/MediaCapture'
+import { useSession } from 'next-auth/react'
 
 export default function ProjectDetailClient({ project, availableOperators = [] }: any) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const [activeTab, setActiveTab] = useState<'BITACORA' | 'GALLERY' | 'EXPENSES'>('BITACORA')
+  
+  // --- BITÁCORA STATE ---
+  const [chatMessages, setChatMessages] = useState(project.chatMessages || [])
+  const [message, setMessage] = useState('')
+  const [activePhase, setActivePhase] = useState<number | null>(null)
+  const [isSending, setIsSending] = useState(false)
+  const [showMediaCapture, setShowMediaCapture] = useState<'audio' | 'video' | null>(null)
+
   const [isPending, startTransition] = useTransition()
   const [isGenerating, setIsGenerating] = useState(false)
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const [isEditingTeam, setIsEditingTeam] = useState(false)
   const [selectedTeam, setSelectedTeam] = useState<number[]>(project.team.map((t: any) => t.user.id))
   const [isSavingTeam, setIsSavingTeam] = useState(false)
-  const [gallery, setGallery] = useState<any[]>(project.gallery || [])
+  // Combine direct gallery uploads and chat media into a unified gallery
+  const initialGallery = [
+    ...(project.gallery || []),
+    ...(project.chatMessages?.flatMap((m: any) => m.media || []).map((m: any) => ({
+      ...m,
+      isFromChat: true
+    })) || [])
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+  const [gallery, setGallery] = useState<any[]>(initialGallery)
   const [isUploading, setIsUploading] = useState(false)
   const [showAllGallery, setShowAllGallery] = useState(false)
   const [galleryFilter, setGalleryFilter] = useState('ALL')
@@ -24,12 +45,16 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const GALLERY_LIMIT = 12
 
-  // --- NUEVO ESTADO PARA GASTOS ---
-  const [isAddingExpense, setIsAddingExpense] = useState(false)
-  const [expenseAmount, setExpenseAmount] = useState('')
-  const [expenseDesc, setExpenseDesc] = useState('')
-  const [expensePhoto, setExpensePhoto] = useState<string | null>(null)
-  const [expenseIsNote, setExpenseIsNote] = useState(false)
+  // --- EXPENSES STATE ---
+  const [expenses, setExpenses] = useState(project.expenses || [])
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<any>(null)
+  const [expenseForm, setExpenseForm] = useState({
+    amount: '',
+    description: '',
+    isNote: false,
+    date: new Date().toISOString().split('T')[0]
+  })
   const [isSavingExpense, setIsSavingExpense] = useState(false)
   
   const [isEditingBudget, setIsEditingBudget] = useState(false)
@@ -249,31 +274,33 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
   }
 
   const handleAddExpense = async () => {
-    if (!expenseAmount || !expenseDesc) return alert('Importe y descripción obligatorios')
+    if (!expenseForm.amount || !expenseForm.description) return alert('Importe y descripción obligatorios')
     setIsSavingExpense(true)
     try {
       const resp = await fetch(`/api/projects/${project.id}/expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: Number(expenseAmount),
-          description: expenseDesc,
-          date: new Date().toISOString(),
-          receiptPhoto: expensePhoto,
-          isNote: expenseIsNote
+          amount: Number(expenseForm.amount),
+          description: expenseForm.description,
+          date: expenseForm.date,
+          isNote: expenseForm.isNote
         })
       })
       if (resp.ok) {
-        setExpenseAmount('')
-        setExpenseDesc('')
-        setExpensePhoto(null)
-        setExpenseIsNote(false)
-        setIsAddingExpense(false)
+        setExpenseForm({
+          amount: '',
+          description: '',
+          isNote: false,
+          date: new Date().toISOString().split('T')[0]
+        })
+        setIsExpenseModalOpen(false)
         startTransition(() => {
-          router.refresh() // Recargar datos sin mostrar pantalla de carga
+          router.refresh()
         })
       } else {
-        alert('Error al guardar gasto')
+        const err = await resp.json()
+        alert(`Error: ${err.error || 'No se pudo guardar el gasto'}`)
       }
     } catch (e) {
       console.error(e)
@@ -453,6 +480,115 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
     }
   }
 
+  // --- BITACORA HANDLERS ---
+  const handleSendMessage = async (e?: React.FormEvent, customMedia?: { blob: Blob, type: 'audio' | 'video', transcription: string }) => {
+    if (e) e.preventDefault()
+    if (!message.trim() && !customMedia) return
+    setIsSending(true)
+
+    try {
+      let payload: any = {
+        content: customMedia ? customMedia.transcription : message,
+        phaseId: activePhase,
+        type: customMedia ? (customMedia.type === 'video' ? 'VIDEO' : 'AUDIO') : 'TEXT',
+      }
+
+      if (customMedia) {
+        // Convert blob to base64
+        const reader = new FileReader()
+        const base64: string = await new Promise((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(customMedia.blob)
+        })
+        payload.media = {
+          base64,
+          filename: `${customMedia.type}_${Date.now()}.webm`,
+          mimeType: customMedia.type === 'video' ? 'video/webm' : 'audio/webm'
+        }
+      }
+
+      const res = await fetch(`/api/projects/${project.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (res.ok) {
+        const newMessage = await res.json()
+        setChatMessages((prev: any) => [...prev, newMessage])
+        setMessage('')
+        setShowMediaCapture(null)
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error sending message:', error)
+      alert('Error al enviar el mensaje')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  // --- EXPENSE HANDLERS ---
+  const handleSaveExpense = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSavingExpense(true)
+    try {
+      const method = editingExpense ? 'PATCH' : 'POST'
+      const url = editingExpense 
+        ? `/api/projects/${project.id}/expenses/${editingExpense.id}`
+        : `/api/projects/${project.id}/expenses`
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...expenseForm,
+          amount: Number(expenseForm.amount)
+        })
+      })
+
+      if (res.ok) {
+        const savedExpense = await res.json()
+        if (editingExpense) {
+          setExpenses((prev: any) => prev.map((ex: any) => ex.id === savedExpense.id ? savedExpense : ex))
+        } else {
+          setExpenses((prev: any) => [savedExpense, ...prev])
+        }
+        setIsExpenseModalOpen(false)
+        setEditingExpense(null)
+        setExpenseForm({ amount: '', description: '', isNote: false, date: new Date().toISOString().split('T')[0] })
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error saving expense:', error)
+    } finally {
+      setIsSavingExpense(false)
+    }
+  }
+
+  const handleDeleteExpense = async (expenseId: number) => {
+    if (!confirm('¿Seguro que deseas eliminar este gasto?')) return
+    try {
+      const res = await fetch(`/api/projects/${project.id}/expenses/${expenseId}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        setExpenses((prev: any) => prev.filter((ex: any) => ex.id !== expenseId))
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error deleting expense:', error)
+    }
+  }
+
+  const formatDateTimeFull = (date: string) => {
+    if (!date) return ''
+    return new Intl.DateTimeFormat('es-ES', { 
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit' 
+    }).format(new Date(date))
+  }
+
   // --- GENERACIÓN DE PDF ---
   const generateReport = async () => {
     setIsGenerating(true)
@@ -543,8 +679,8 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
       const attendanceData = project.dayRecords.map((rec: any) => [
         formatDate(rec.createdAt),
         rec.user.name,
-        rec.startTime ? new Date(rec.startTime).toLocaleTimeString('es-EC', { timeZone: ECUADOR_TIMEZONE }) : '---',
-        rec.endTime ? new Date(rec.endTime).toLocaleTimeString('es-EC', { timeZone: ECUADOR_TIMEZONE }) : 'Aún en labor',
+        rec.startTime ? formatTimeEcuador(rec.startTime) : '---',
+        rec.endTime ? formatTimeEcuador(rec.endTime) : 'Aún en labor',
         rec.endTime && rec.startTime ? 
           `${((new Date(rec.endTime).getTime() - new Date(rec.startTime).getTime()) / (1000 * 60 * 60)).toFixed(1)} hrs` : '---'
       ])
@@ -856,25 +992,23 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
               &larr; Volver
             </Link>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <select
-                value={currentStatus}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                disabled={isUpdatingStatus}
-                style={{
-                  padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold',
-                  backgroundColor: currentStatus === 'LEAD' ? 'rgba(234, 179, 8, 0.15)' : currentStatus === 'ACTIVO' ? 'rgba(56, 189, 248, 0.15)' : currentStatus === 'COMPLETADO' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                  color: currentStatus === 'LEAD' ? 'var(--warning)' : currentStatus === 'ACTIVO' ? 'var(--primary)' : currentStatus === 'COMPLETADO' ? 'var(--success)' : 'var(--danger)',
-                  border: '1px solid currentColor',
-                  cursor: 'pointer', appearance: 'auto',
-                  textTransform: 'uppercase'
-                }}
-              >
-                <option value="LEAD">Negociando</option>
-                <option value="ACTIVO">Activo</option>
-                <option value="PENDIENTE">Pendiente</option>
-                <option value="COMPLETADO">Completado</option>
-                <option value="CANCELADO">Cancelado</option>
-              </select>
+                <select
+                  value={['COMPLETADO', 'CANCELADO', 'PENDIENTE'].includes(currentStatus) ? 'ARCHIVADO' : currentStatus}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  disabled={isUpdatingStatus}
+                  style={{
+                    padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold',
+                    backgroundColor: currentStatus === 'LEAD' ? 'rgba(234, 179, 8, 0.15)' : currentStatus === 'ACTIVO' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(156, 163, 175, 0.15)',
+                    color: currentStatus === 'LEAD' ? 'var(--warning)' : currentStatus === 'ACTIVO' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: '1px solid currentColor',
+                    cursor: 'pointer', appearance: 'auto',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  <option value="LEAD">Negociando</option>
+                  <option value="ACTIVO">Activo</option>
+                  <option value="ARCHIVADO">Archivado</option>
+                </select>
               {project.creator && (
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1274,102 +1408,20 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '0.9rem' }}>
                 <span style={{ color: isCostoExcedido ? 'var(--danger)' : 'var(--text-muted)' }}>Gastado (Real)</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {!isAddingExpense ? (
-                    <button 
-                      onClick={() => setIsAddingExpense(true)}
-                      title="Registrar Gasto Directo"
-                      style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      Agregar Gasto o Nota
-                    </button>
-                  ) : (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Monto/Motivo</span>
-                  )}
+                  <button 
+                    onClick={() => {
+                      setActiveTab('EXPENSES')
+                      setIsExpenseModalOpen(true)
+                    }}
+                    title="Registrar Gasto Directo"
+                    style={{ padding: '4px 8px', fontSize: '0.75rem', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Agregar Gasto o Nota
+                  </button>
                   <span style={{ fontWeight: 'bold', color: isCostoExcedido ? 'var(--danger)' : 'var(--success)' }}>$ {realExpenses.toFixed(2)}</span>
                 </div>
               </div>
-
-               {isAddingExpense && (
-                <div style={{ padding: '16px', backgroundColor: 'var(--bg-surface)', borderRadius: '12px', marginBottom: '15px', border: '1px solid var(--primary)', boxShadow: '0 4px 12px rgba(56, 189, 248, 0.1)' }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
-                    <input 
-                      type="number" 
-                      placeholder="Monto ($)" 
-                      value={expenseAmount}
-                      onChange={e => setExpenseAmount(e.target.value)}
-                      style={{ width: '100px', padding: '10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white' }}
-                    />
-                    <input 
-                      type="text" 
-                      placeholder="Descripción (ej: Material PVC)" 
-                      value={expenseDesc}
-                      onChange={e => setExpenseDesc(e.target.value)}
-                      style={{ flex: 1, minWidth: '180px', padding: '10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'white' }}
-                    />
-                  </div>
-                  
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={expenseIsNote} 
-                        onChange={e => setExpenseIsNote(e.target.checked)} 
-                        style={{ accentColor: 'var(--primary)' }}
-                      />
-                      Es solo una nota informativa (ej: adelanto de efectivo, no afecta al gasto total del proyecto)
-                    </label>
-                  </div>
-                  
-                  <div style={{ marginBottom: '12px' }}>
-                    {!expensePhoto ? (
-                      <label className="btn btn-ghost" style={{ width: '100%', border: '1px dashed var(--primary)', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', borderRadius: '8px', fontSize: '0.85rem' }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        Escanear Recibo (Foto)
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          capture="environment" 
-                          style={{ display: 'none' }} 
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (file) {
-                              const reader = new FileReader()
-                              reader.onloadend = async () => {
-                                const compressed = await compressImage(reader.result as string)
-                                setExpensePhoto(compressed)
-                              }
-                              reader.readAsDataURL(file)
-                            }
-                          }} 
-                        />
-                      </label>
-                    ) : (
-                      <div style={{ position: 'relative', width: '100%', height: '100px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                        <img src={expensePhoto} alt="Recibo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        <button 
-                          type="button" 
-                          style={{ position: 'absolute', top: '5px', right: '5px', backgroundColor: 'rgba(239, 68, 68, 0.8)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer' }}
-                          onClick={() => setExpensePhoto(null)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button onClick={() => { setIsAddingExpense(false); setExpensePhoto(null); }} style={{ padding: '8px 16px', fontSize: '0.85rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancelar</button>
-                    <button 
-                      onClick={handleAddExpense} 
-                      disabled={isSavingExpense}
-                      style={{ padding: '8px 20px', fontSize: '0.85rem', backgroundColor: 'var(--primary)', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}
-                    >
-                      {isSavingExpense ? 'Guardando...' : 'Confirmar Gasto'}
-                    </button>
-                  </div>
-                </div>
-              )}
 
               <div className="progress-bar" style={{ height: '22px', backgroundColor: 'var(--bg-surface)', borderRadius: '11px' }}>
                 <div className="progress-fill" style={{ 
@@ -1766,192 +1818,349 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
         </div>
       </div>
 
-      {/* Galería del Proyecto - Full Width at Bottom */}
-      <div className="card" style={{ marginTop: '30px', width: '100%' }} id="galeria">
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '20px', marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <h3 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              Planos y Galería del Proyecto
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Administra planos, diseños y fotos de obra.</p>
-          </div>
-          
-          <ProjectUploader 
-            files={[]} 
-            onAddFile={handleUploadToGallery}
-            onRemoveFile={() => {}}
-            minimal={true}
-            showGrid={false}
-            onFilterChange={(f) => setGalleryFilter(f)}
-          />
+      {/* SECCIÓN DE PESTAÑAS (TABS) */}
+      <div style={{ marginTop: '40px', width: '100%' }}>
+        {/* Tab Navigation */}
+        <div style={{ 
+          display: 'flex', 
+          gap: '10px', 
+          marginBottom: '20px', 
+          paddingBottom: '10px', 
+          borderBottom: '1px solid var(--border-color)',
+          overflowX: 'auto',
+          scrollbarWidth: 'none'
+        }}>
+          {[
+            { id: 'BITACORA', label: 'Bitácora', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+            { id: 'GALLERY', label: 'Galería', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> },
+            { id: 'EXPENSES', label: 'Gastos', icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 20px',
+                borderRadius: '12px',
+                backgroundColor: activeTab === tab.id ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                color: activeTab === tab.id ? 'var(--bg-deep)' : 'var(--text)',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                transition: 'all 0.3s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', 
-          gap: '15px'
-        }}>
-          {(showAllGallery 
-            ? (galleryFilter === 'ALL' ? gallery : gallery.filter((i: any) => i.type === galleryFilter || (galleryFilter === 'IMAGE' && i.mimeType.startsWith('image/'))))
-            : (galleryFilter === 'ALL' ? gallery : gallery.filter((i: any) => i.type === galleryFilter || (galleryFilter === 'IMAGE' && i.mimeType.startsWith('image/')))).slice(0, GALLERY_LIMIT)
-          ).map((item: any) => (
-            <div key={item.id} className="group" style={{ 
-              position: 'relative', 
-              aspectRatio: '1/1', 
-              borderRadius: '12px', 
-              overflow: 'hidden', 
-              border: '1px solid var(--border-color)', 
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              backgroundColor: 'var(--bg-surface)'
-            }}>
-              {/* Media Content */}
-              {item.mimeType.startsWith('image/') ? (
-                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                  <img 
-                    src={item.url} 
-                    alt={item.filename} 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }} 
-                    className="group-hover:scale-110"
-                  />
-                  {(item.filename.toLowerCase().includes('plano') || item.filename.toLowerCase().includes('diseño')) && (
-                    <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', zIndex: 1 }}>
-                      PLANO
-                    </div>
-                  )}
+        {/* Tab Content */}
+        <div className="card" style={{ padding: '25px', minHeight: '400px' }}>
+          
+          {/* 1. BITÁCORA INTERACTIVA */}
+          {activeTab === 'BITACORA' && (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '600px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text)' }}>Línea de Tiempo del Proyecto</h3>
+                <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', padding: '5px' }}>
+                  <button 
+                    onClick={() => setActivePhase(null)}
+                    style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', border: '1px solid var(--border-color)', backgroundColor: activePhase === null ? 'var(--primary)' : 'transparent', color: activePhase === null ? 'var(--bg-deep)' : 'var(--text)' }}
+                  >
+                    General
+                  </button>
+                  {project.phases.map((p: any) => (
+                    <button 
+                      key={p.id}
+                      onClick={() => setActivePhase(p.id)}
+                      style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', border: '1px solid var(--border-color)', backgroundColor: activePhase === p.id ? 'var(--primary)' : 'transparent', color: activePhase === p.id ? 'var(--bg-deep)' : 'var(--text)', whiteSpace: 'nowrap' }}
+                    >
+                      {p.title}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '10px' }}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', wordBreak: 'break-all', opacity: 0.8 }}>{item.filename}</span>
-                  {(item.filename.toLowerCase().includes('plano') || item.filename.toLowerCase().includes('diseño')) && (
-                    <div style={{ position: 'absolute', top: '8px', left: '8px', backgroundColor: 'var(--primary)', color: 'white', fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', textTransform: 'uppercase', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', zIndex: 1 }}>
-                      PLANO
-                    </div>
-                  )}
-                </div>
-              )}
+              </div>
 
-              {/* Interaction Overlay */}
-              <div style={{ 
-                position: 'absolute', inset: 0, 
-                backgroundColor: 'rgba(12, 26, 42, 0.7)', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-                opacity: 0, transition: 'opacity 0.3s ease',
-                backdropFilter: 'blur(2px)',
-                zIndex: 1
-              }} className="group-hover:opacity-100">
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '15px', paddingRight: '10px', marginBottom: '20px' }}>
+                {chatMessages
+                  .filter((m: any) => activePhase === null ? true : m.phaseId === activePhase)
+                  .map((msg: any) => {
+                    const isMe = msg.userId === Number(session?.user?.id)
+                    const isAdminMsg = true // In this view, we style it corporately
+                    
+                    return (
+                      <div key={msg.id} style={{ 
+                        alignSelf: isMe ? 'flex-end' : 'flex-start', 
+                        maxWidth: '85%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px'
+                      }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '8px', 
+                          justifyContent: isMe ? 'flex-end' : 'flex-start',
+                          fontSize: '0.75rem',
+                          color: isMe ? 'var(--primary)' : 'var(--text-muted)'
+                        }}>
+                          <span style={{ fontWeight: 'bold' }}>{msg.user?.name}</span>
+                          <span style={{ opacity: 0.6 }}>{formatDateTime(msg.createdAt)}</span>
+                        </div>
+
+                        <div style={{ 
+                          backgroundColor: isMe ? 'rgba(0, 112, 192, 0.15)' : 'var(--bg-surface)',
+                          border: isMe ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                          padding: '12px 16px',
+                          borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                          color: 'var(--text)',
+                          fontSize: '0.9rem',
+                          position: 'relative',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        }}>
+                          {msg.type === 'AUDIO' && (
+                            <div style={{ marginBottom: '8px' }}>
+                              <audio src={msg.media?.[0]?.url} controls style={{ width: '200px', height: '35px' }} />
+                            </div>
+                          )}
+                          {msg.type === 'VIDEO' && (
+                            <div style={{ marginBottom: '8px', maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
+                              <video src={msg.media?.[0]?.url} controls style={{ width: '100%', display: 'block' }} />
+                            </div>
+                          )}
+                          {msg.type === 'IMAGE' && msg.media?.[0] && (
+                            <div style={{ marginBottom: '8px', maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
+                              <img src={msg.media[0].url} alt="Avance" style={{ width: '100%', objectFit: 'cover' }} />
+                            </div>
+                          )}
+                          {msg.type === 'NOTE' && (
+                             <div style={{ fontSize: '0.7rem', color: 'var(--warning)', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Nota Destacada</div>
+                          )}
+                          <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                {chatMessages.length === 0 && (
+                  <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <p>No hay registros en esta sección.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Input Area */}
+              <div style={{ padding: '20px', backgroundColor: 'var(--bg-deep)', borderRadius: '15px' }}>
+                {showMediaCapture ? (
+                  <div style={{ marginBottom: '15px' }}>
+                    <MediaCapture 
+                      mode={showMediaCapture} 
+                      onCapture={(blob, type, transcription) => handleSendMessage(undefined, { blob, type, transcription })} 
+                    />
+                    <button onClick={() => setShowMediaCapture(null)} className="btn btn-ghost btn-sm" style={{ marginTop: '10px' }}>Cancelar</button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                      <button type="button" onClick={() => setShowMediaCapture('audio')} title="Grabar Audio" className="btn btn-ghost btn-sm" style={{ padding: '8px', color: 'var(--primary)' }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                      </button>
+                      <button type="button" onClick={() => setShowMediaCapture('video')} title="Grabar Video" className="btn btn-ghost btn-sm" style={{ padding: '8px', color: 'var(--primary)' }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+                      </button>
+                    </div>
+                    <input 
+                      className="form-input" 
+                      placeholder="Escribe un mensaje al equipo..." 
+                      value={message}
+                      onChange={e => setMessage(e.target.value)}
+                      style={{ flex: 1, backgroundColor: 'var(--bg-card)' }}
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={isSending || !message.trim()}>
+                      {isSending ? '...' : 'Enviar'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 2. GALERÍA UNIFICADA */}
+          {activeTab === 'GALLERY' && (
+            <div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '20px', marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    Archivos del Proyecto
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Gestiona planos, fotos y documentos técnicos.</p>
+                </div>
                 
-                {/* View Button */}
-                <button 
-                  onClick={() => window.open(item.url, '_blank')}
-                  title="Ver archivo"
-                  style={{ 
-                    width: '38px', height: '38px', borderRadius: '50%', backgroundColor: 'white', color: 'var(--bg-deep)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer',
-                    transition: 'transform 0.2s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
+                <ProjectUploader 
+                  files={[]} 
+                  onAddFile={handleUploadToGallery}
+                  onRemoveFile={() => {}}
+                  minimal={true}
+                  showGrid={false}
+                  onFilterChange={(f) => setGalleryFilter(f)}
+                />
+              </div>
 
-                {/* Download Button */}
-                <button 
-                  onClick={() => handleDownload(item.url, item.filename)}
-                  title="Descargar"
-                  style={{ 
-                    width: '38px', height: '38px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: 'white',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer',
-                    transition: 'transform 0.2s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '20px' }}>
+                {(showAllGallery 
+                  ? (galleryFilter === 'ALL' ? gallery : gallery.filter((i: any) => i.type === galleryFilter || (galleryFilter === 'IMAGE' && i.mimeType.startsWith('image/'))))
+                  : (galleryFilter === 'ALL' ? gallery : gallery.filter((i: any) => i.type === galleryFilter || (galleryFilter === 'IMAGE' && i.mimeType.startsWith('image/')))).slice(0, GALLERY_LIMIT)
+                ).map((item: any) => (
+                  <div key={item.id} className="group" style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-surface)' }}>
+                    {item.mimeType.startsWith('image/') ? (
+                      <img src={item.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--info)' }}>{item.filename}</span>
+                      </div>
+                    )}
+                    <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: '0.3s' }} className="group-hover:opacity-100">
+                      <button onClick={() => window.open(item.url, '_blank')} className="btn btn-primary btn-sm">Ver</button>
+                      <button onClick={() => handleDeleteFromGallery(item.id)} className="btn btn-danger btn-sm" style={{ marginLeft: '5px' }}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {gallery.length > GALLERY_LIMIT && (
+                <button onClick={() => setShowAllGallery(!showAllGallery)} className="btn btn-ghost" style={{ width: '100%', marginTop: '20px' }}>
+                  {showAllGallery ? 'Ver Menos' : 'Ver Todos'}
                 </button>
+              )}
+            </div>
+          )}
 
-                {/* Edit Filename Button */}
+          {/* 3. GESTIÓN DE GASTOS */}
+          {activeTab === 'EXPENSES' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem' }}>Control de Gastos</h3>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Historial detallado y auditoría de egresos.</p>
+                </div>
                 <button 
                   onClick={() => {
-                    setEditingItemId(item.id)
-                    setEditingFilename(item.filename)
+                    setEditingExpense(null)
+                    setExpenseForm({ amount: '', description: '', isNote: false, date: new Date().toISOString().split('T')[0] })
+                    setIsExpenseModalOpen(true)
                   }}
-                  title="Renombrar archivo"
-                  style={{ 
-                    width: '38px', height: '38px', borderRadius: '50%', backgroundColor: 'var(--bg-deep)', color: 'white',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-color)', cursor: 'pointer',
-                    transition: 'transform 0.2s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  className="btn btn-primary"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  + Agregar Gasto/Nota
                 </button>
               </div>
 
-              {/* Rename Inline Input */}
-              {editingItemId === item.id && (
-                <div style={{ 
-                  position: 'absolute', inset: 0, zIndex: 10,
-                  backgroundColor: 'rgba(12, 26, 42, 0.95)', 
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px'
-                }}>
-                  <input 
-                    type="text" 
-                    value={editingFilename} 
-                    onChange={e => setEditingFilename(e.target.value)}
-                    style={{ width: '100%', padding: '6px', fontSize: '0.8rem', borderRadius: '4px', marginBottom: '8px', border: '1px solid var(--primary)' }}
-                    autoFocus
-                  />
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => setEditingItemId(null)} className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '4px 8px' }}>Cancelar</button>
-                    <button onClick={() => handleRenameGalleryItem(item.id)} className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '4px 8px' }}>OK</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Delete Button (Keep separate but styled) */}
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleDeleteFromGallery(item.id); }}
-                style={{ 
-                  position: 'absolute', top: '8px', right: '8px', 
-                  backgroundColor: 'rgba(239, 68, 68, 0.9)', color: 'white', 
-                  border: 'none', borderRadius: '6px', padding: '6px', 
-                  cursor: 'pointer', opacity: 0, transition: 'opacity 0.2s',
-                  zIndex: 2
-                }}
-                className="group-hover:opacity-100 shadow-md"
-                title="Eliminar de galería"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-              </button>
-            </div>
-          ))}
-          
-          {gallery.length === 0 && (
-            <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-muted)', fontSize: '1rem', padding: '40px', border: '2px dashed var(--border-color)', borderRadius: '12px', backgroundColor: 'var(--bg-surface)' }}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" style={{ marginBottom: '15px', opacity: 0.5 }}>
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-              </svg>
-              <p>No hay imágenes en la galería aún.</p>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Fecha</th>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Responsable</th>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Descripción</th>
+                      <th style={{ padding: '12px', textAlign: 'left' }}>Tipo</th>
+                      <th style={{ padding: '12px', textAlign: 'right' }}>Monto</th>
+                      <th style={{ padding: '12px', textAlign: 'center' }}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expenses.map((ex: any) => (
+                      <tr key={ex.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                        <td style={{ padding: '12px' }}>{formatDateEcuador(ex.date)}</td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>
+                              {ex.user?.name.substring(0,2).toUpperCase()}
+                            </div>
+                            {ex.user?.name}
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <div>{ex.description}</div>
+                          {ex.lat && ex.lng && (
+                            <a href={`https://www.google.com/maps?q=${ex.lat},${ex.lng}`} target="_blank" rel="noreferrer" style={{ fontSize: '0.7rem', color: 'var(--info)' }}>📍 Ver Ubicación</a>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '4px', backgroundColor: ex.isNote ? 'rgba(245, 158, 11, 0.1)' : 'rgba(0, 112, 192, 0.1)', color: ex.isNote ? 'var(--warning)' : 'var(--primary)', fontWeight: 'bold' }}>
+                            {ex.isNote ? 'NOTA' : 'REAL'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 'bold' }}>$ {Number(ex.amount).toFixed(2)}</td>
+                        <td style={{ padding: '12px', textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                            {ex.receiptUrl && (
+                              <button onClick={() => window.open(ex.receiptUrl, '_blank')} className="btn btn-ghost btn-sm" title="Ver Recibo">📎</button>
+                            )}
+                            <button 
+                              onClick={() => {
+                                setEditingExpense(ex)
+                                setExpenseForm({
+                                  amount: ex.amount.toString(),
+                                  description: ex.description || '',
+                                  isNote: ex.isNote,
+                                  date: new Date(ex.date).toISOString().split('T')[0]
+                                })
+                                setIsExpenseModalOpen(true)
+                              }}
+                              className="btn btn-ghost btn-sm"
+                            >
+                              ✏️
+                            </button>
+                            <button onClick={() => handleDeleteExpense(ex.id)} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}>✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
-
-        {gallery.length > GALLERY_LIMIT && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '30px' }}>
-            <button 
-              className="btn btn-ghost" 
-              onClick={() => setShowAllGallery(!showAllGallery)}
-              style={{ border: '1px solid var(--border-color)', padding: '10px 30px', borderRadius: '25px', color: 'var(--primary)' }}
-            >
-              {showAllGallery ? 'Ver menos' : `Ver todas las imágenes (${gallery.length})`}
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* MODAL PARA GASTOS */}
+      {isExpenseModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(5px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="card" style={{ maxWidth: '500px', width: '100%', padding: '30px' }}>
+            <h3 style={{ marginBottom: '20px' }}>{editingExpense ? 'Editar Gasto/Nota' : 'Nuevo Registro de Gasto'}</h3>
+            <form onSubmit={handleSaveExpense} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div className="form-group">
+                <label className="form-label">Monto ($)</label>
+                <input type="number" step="0.01" className="form-input" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Descripción</label>
+                <input type="text" className="form-input" value={expenseForm.description} onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Fecha</label>
+                <input type="date" className="form-input" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} required />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input type="checkbox" id="modalIsNote" checked={expenseForm.isNote} onChange={e => setExpenseForm({...expenseForm, isNote: e.target.checked})} />
+                <label htmlFor="modalIsNote">¿Es solo una nota informativa?</label>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setIsExpenseModalOpen(false)} className="btn btn-ghost" style={{ flex: 1 }}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={isSavingExpense}>
+                  {isSavingExpense ? 'Guardando...' : 'Guardar Datos'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ═══════ ZONA DE PELIGRO ═══════ */}
       <div style={{ marginTop: '50px', paddingTop: '30px', borderTop: '2px dashed rgba(239, 68, 68, 0.2)' }}>

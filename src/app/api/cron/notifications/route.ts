@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
-import { getLocalNow } from '@/lib/date-utils';
+import { getLocalNow, formatTimeEcuador } from '@/lib/date-utils';
 
 /**
  * RUTA DE CRON: https://dominio.com/api/cron/notifications?secret=...
@@ -58,12 +58,7 @@ export async function GET(request: Request) {
           let summary = `📋 *Resumen del Día - Aquatech*\n\nHola *${op.name}*, hoy tienes *${op.appointments.length}* tareas asignadas:\n\n`;
           
           op.appointments.forEach((apt, idx) => {
-            const time = new Date(apt.startTime).toLocaleTimeString('es-EC', { 
-              hour: '2-digit', 
-              minute: '2-digit', 
-              hour12: true,
-              timeZone: 'America/Guayaquil'
-            });
+            const time = formatTimeEcuador(apt.startTime);
             summary += `${idx + 1}. 🕙 *${apt.title}* a las ${time}\n`;
           });
 

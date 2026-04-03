@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { formatDateEcuador } from '@/lib/date-utils';
 
 export const metadata = {
   title: 'Blog - Admin | Aquatech CRM'
@@ -75,7 +76,7 @@ export default async function AdminBlogPage() {
                     </td>
                     <td>{post.author?.name || 'Sistema'}</td>
                     <td>{post.category?.name || '-'}</td>
-                    <td>{post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : '-'}</td>
+                    <td>{post.publishedAt ? formatDateEcuador(post.publishedAt) : '-'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <Link href={`/admin/blog/edit/${post.id}`} className="btn btn-ghost btn-sm">

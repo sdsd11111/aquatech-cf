@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import CalendarView from '@/components/Calendar/CalendarView'
 import AppointmentModal from '@/components/Calendar/AppointmentModal'
+import CalendarAssistant from '@/components/Calendar/CalendarAssistant'
 
 interface AdminCalendarClientProps {
   operators: any[]
@@ -117,6 +118,8 @@ export default function AdminCalendarClient({ operators, projects }: AdminCalend
         operators={operators} // New prop for admin selection
         isAdminView={true}
       />
+
+      <CalendarAssistant />
 
       <style jsx>{`
         .calendar-wrapper {

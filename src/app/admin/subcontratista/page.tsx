@@ -14,7 +14,7 @@ export default async function SubcontratistaDashboard() {
   }
 
   // Redirect admins to their dashboard
-  if (session.user.role === 'ADMIN' || session.user.role === 'ADMINISTRADORA') {
+  if (session.user.role === 'ADMIN' || session.user.role === 'ADMINISTRADORA' || session.user.role === 'SUPERADMIN') {
     redirect('/admin')
   }
 

@@ -4,6 +4,11 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
+/**
+ * AQUATECH_PROJECT_VIEW_V3
+ * Refactorización con enfoque en alto contraste y robustez de UI.
+ */
+
 export default function ProyectosPage() {
   const router = useRouter()
   const [projects, setProjects] = useState<any[]>([])
@@ -12,6 +17,7 @@ export default function ProyectosPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null)
 
   useEffect(() => {
+    console.log('--- AQUATECH_UI_V3_LOADED ---')
     fetchProjects()
   }, [])
 
@@ -54,11 +60,13 @@ export default function ProyectosPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'ACTIVO': return 'var(--primary)'
-      case 'COMPLETADO': return 'var(--success)'
-      case 'LEAD': return 'var(--warning)'
-      case 'CANCELADO': return 'var(--danger)'
-      default: return 'var(--text-muted)'
+      case 'ACTIVO': return '#0EA5E9' // Celeste brillante
+      case 'LEAD': return '#F59E0B'   // Ámbar
+      case 'ARCHIVADO': 
+      case 'COMPLETADO': 
+      case 'CANCELADO': 
+        return '#94A3B8'              // Slate
+      default: return '#94A3B8'
     }
   }
 
@@ -66,6 +74,7 @@ export default function ProyectosPage() {
     switch (status) {
       case 'LEAD': return 'Negociando'
       case 'ACTIVO': return 'Activo'
+      case 'ARCHIVADO': return 'Archivado'
       case 'COMPLETADO': return 'Completado'
       case 'CANCELADO': return 'Cancelado'
       case 'PENDIENTE': return 'Pendiente'
@@ -73,17 +82,26 @@ export default function ProyectosPage() {
     }
   }
 
-  const STATUS_OPTIONS = [
-    { value: 'LEAD', label: 'Negociando', color: 'var(--warning)' },
-    { value: 'ACTIVO', label: 'Activo', color: 'var(--primary)' },
-    { value: 'PENDIENTE', label: 'Pendiente', color: 'var(--text-muted)' },
-    { value: 'COMPLETADO', label: 'Completado', color: 'var(--success)' },
-    { value: 'CANCELADO', label: 'Cancelado', color: 'var(--danger)' },
+  const TABS_CONFIG = [
+    { id: 'LEAD', label: 'Negociando', color: '#F59E0B' },
+    { id: 'ACTIVO', label: 'Activo', color: '#0EA5E9' },
+    { id: 'ARCHIVADO', label: 'Archivados', color: '#94A3B8' }
+  ]
+
+  const SELECT_OPTIONS = [
+    { value: 'LEAD', label: 'Negociando' },
+    { value: 'ACTIVO', label: 'Activo' },
+    { value: 'ARCHIVADO', label: 'Archivado' }
   ]
 
   const filteredProjects = statusFilter === 'ALL' 
     ? projects 
-    : projects.filter(p => p.status === statusFilter)
+    : projects.filter(p => {
+        if (statusFilter === 'ARCHIVADO') {
+            return ['ARCHIVADO', 'COMPLETADO', 'CANCELADO', 'PENDIENTE'].includes(p.status);
+        }
+        return p.status === statusFilter;
+    })
 
   if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>Cargando proyectos...</div>
 
@@ -102,33 +120,50 @@ export default function ProyectosPage() {
         </Link>
       </div>
 
-      {/* Filter Tabs */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '25px', flexWrap: 'wrap' }}>
-        {[{ value: 'ALL', label: 'Todos' }, ...STATUS_OPTIONS].map(opt => (
+      {/* Tabs con Contraste Premium */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '35px', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setStatusFilter('ALL')}
+          style={{
+            padding: '12px 28px', borderRadius: '40px', fontSize: '0.95rem', fontWeight: '800',
+            border: 'none',
+            backgroundColor: statusFilter === 'ALL' ? 'var(--primary)' : 'rgba(255,255,255,0.08)',
+            color: statusFilter === 'ALL' ? '#0F172A' : 'rgba(255,255,255,0.6)',
+            cursor: 'pointer', transition: 'all 0.2s ease',
+            boxShadow: statusFilter === 'ALL' ? '0 10px 20px -5px rgba(56, 189, 248, 0.4)' : 'none'
+          }}
+        >
+          Todos
+        </button>
+
+        {TABS_CONFIG.map(opt => (
           <button
-            key={opt.value}
-            onClick={() => setStatusFilter(opt.value)}
+            key={opt.id}
+            onClick={() => setStatusFilter(opt.id)}
             style={{
-              padding: '8px 18px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '600',
-              border: statusFilter === opt.value ? '2px solid var(--primary)' : '2px solid var(--border-color)',
-              backgroundColor: statusFilter === opt.value ? 'var(--primary-glow)' : 'var(--bg-deep)',
-              color: statusFilter === opt.value ? 'var(--primary)' : 'var(--text-muted)',
-              cursor: 'pointer', transition: 'all 0.2s'
+              padding: '12px 28px', borderRadius: '40px', fontSize: '0.95rem', fontWeight: '800',
+              border: statusFilter === opt.id ? `2px solid ${opt.color}` : '2px solid transparent',
+              backgroundColor: statusFilter === opt.id ? `${opt.color}25` : 'rgba(255,255,255,0.08)',
+              color: statusFilter === opt.id ? opt.color : 'rgba(255,255,255,0.6)',
+              cursor: 'pointer', transition: 'all 0.2s ease',
+              boxShadow: statusFilter === opt.id ? `0 10px 25px -5px ${opt.color}30` : 'none'
             }}
           >
             {opt.label} 
-            {opt.value !== 'ALL' && (
-              <span style={{ marginLeft: '6px', opacity: 0.7 }}>
-                ({projects.filter(p => p.status === opt.value).length})
-              </span>
-            )}
+            <span style={{ marginLeft: '10px', opacity: 0.7 }}>
+              ({
+                opt.id === 'ARCHIVADO' 
+                  ? projects.filter(p => ['ARCHIVADO', 'COMPLETADO', 'CANCELADO', 'PENDIENTE'].includes(p.status)).length
+                  : projects.filter(p => p.status === opt.id).length
+              })
+            </span>
           </button>
         ))}
       </div>
 
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', 
         gap: '24px',
         marginTop: '20px'
       }}>
@@ -144,80 +179,80 @@ export default function ProyectosPage() {
                 <div className="card h-full" style={{ 
                   padding: '24px', 
                   borderRadius: '16px', 
-                  border: '1px solid var(--border-color)',
+                  border: '1px solid var(--border)',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  minHeight: '280px',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  minHeight: '300px',
+                  transition: 'all 0.3s ease',
                   cursor: 'pointer',
                   position: 'relative',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
+                  background: 'var(--bg-card)'
                 }}>
-                  {/* Background Accent */}
                   <div style={{ 
                       position: 'absolute', top: 0, right: 0, 
-                      width: '60px', height: '60px', 
+                      width: '80px', height: '80px', 
                       background: `linear-gradient(135deg, transparent 50%, ${statusColor}15 50%)`,
                       zIndex: 0
                   }}></div>
 
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', position: 'relative', zIndex: 1 }}>
-                      {/* Status Dropdown */}
                       <div 
-                        onClick={(e) => e.preventDefault()}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                         style={{ position: 'relative' }}
                       >
                         <select
-                          value={p.status}
+                          value={['COMPLETADO', 'CANCELADO', 'PENDIENTE'].includes(p.status) ? 'ARCHIVADO' : p.status}
                           disabled={updatingId === p.id}
                           onChange={(e) => {
                             const syntheticEvent = { preventDefault: () => {}, stopPropagation: () => {} } as React.MouseEvent
                             handleStatusChange(p.id, e.target.value, syntheticEvent)
                           }}
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                           style={{
-                            padding: '6px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 'bold',
-                            backgroundColor: `${statusColor}15`, color: statusColor,
-                            border: `1px solid ${statusColor}40`, cursor: 'pointer',
+                            padding: '8px 16px', borderRadius: '24px', fontSize: '0.8rem', fontWeight: '900',
+                            backgroundColor: '#FFFFFF', color: '#0B1623',
+                            border: `2px solid ${statusColor}`, cursor: 'pointer',
                             appearance: 'none', WebkitAppearance: 'none',
-                            paddingRight: '24px',
+                            paddingRight: '36px',
                             textTransform: 'uppercase', letterSpacing: '0.05em'
                           }}
                         >
-                          {STATUS_OPTIONS.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          {SELECT_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value} style={{ backgroundColor: '#FFFFFF', color: '#0B1623' }}>
+                              {opt.label.toUpperCase()}
+                            </option>
                           ))}
                         </select>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={statusColor} strokeWidth="3" style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0B1623" strokeWidth="4" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                           <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                       </div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '500' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: '600' }}>
                         {formatDate(p.createdAt)}
                       </div>
                     </div>
 
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', fontWeight: '700', lineHeight: '1.3' }}>{p.title}</h3>
-                    <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '24px' }}>
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: '1.3rem', fontWeight: '800', lineHeight: '1.3', color: '#FFFFFF' }}>{p.title}</h3>
+                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '24px' }}>
                       {p.client?.name || 'Cliente sin asignar'}
                     </p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Presupuesto</span>
-                            <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text)' }}>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Presupuesto Estimado</span>
+                            <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#FFFFFF' }}>
                                 $ {Number(p.estimatedBudget).toLocaleString()}
                             </span>
                         </div>
                         
                         <div style={{ marginTop: '10px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600' }}>
-                            <span>Avance de Obra</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginBottom: '8px', fontWeight: '700' }}>
+                            <span>Progreso de Obra</span>
                             <span>{progress}%</span>
                           </div>
-                          <div style={{ height: '6px', backgroundColor: 'var(--bg-deep)', borderRadius: '10px', overflow: 'hidden' }}>
+                          <div style={{ height: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '10px', overflow: 'hidden' }}>
                             <div style={{ 
                                 width: `${progress}%`, 
                                 height: '100%', 
@@ -229,18 +264,18 @@ export default function ProyectosPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>{p.team?.length || 0}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '700' }}>{p.team?.length || 0}</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>{completedPhases}/{totalPhases}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '700' }}>{completedPhases}/{totalPhases}</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>{(p.phases || []).reduce((acc: number, ph: any) => acc + (ph.estimatedDays || 0), 0)}d</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '700' }}>{(p.phases || []).reduce((acc: number, ph: any) => acc + (ph.estimatedDays || 0), 0)}d</span>
                       </div>
                   </div>
                 </div>
@@ -252,20 +287,20 @@ export default function ProyectosPage() {
         {filteredProjects.length === 0 && (
           <div style={{ 
             gridColumn: '1 / -1', 
-            padding: '80px 20px', 
+            padding: '100px 20px', 
             textAlign: 'center', 
-            backgroundColor: 'var(--bg-deep)', 
+            backgroundColor: 'rgba(255,255,255,0.02)', 
             borderRadius: '24px',
-            border: '2px dashed var(--border-color)'
+            border: '2px dashed rgba(255,255,255,0.08)'
           }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1" style={{ marginBottom: '15px' }}>
+            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1" style={{ marginBottom: '20px' }}>
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
-            <h3 style={{ color: 'var(--text)', marginBottom: '8px' }}>
-              {statusFilter === 'ALL' ? 'No hay proyectos aún' : `No hay proyectos en estado "${getStatusLabel(statusFilter)}"`}
+            <h3 style={{ color: '#FFFFFF', marginBottom: '10px', fontSize: '1.5rem' }}>
+              {statusFilter === 'ALL' ? 'Sin proyectos' : `No hay proyectos "${getStatusLabel(statusFilter)}"`}
             </h3>
-            <p style={{ color: 'var(--text-muted)' }}>
-              {statusFilter === 'ALL' ? 'Comienza creando tu primer proyecto de obra o mantenimiento.' : 'Cambia el filtro para ver otros proyectos.'}
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '1rem' }}>
+              Intenta cambiar el filtro o crear un nuevo registro.
             </p>
           </div>
         )}

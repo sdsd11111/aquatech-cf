@@ -32,9 +32,9 @@ html, body {
   --bg-modal: #101E30;
 
   /* Text */
-  --text: #E2E8F0;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  --text: #FFFFFF;
+  --text-secondary: #F1F5F9;
+  --text-muted: #CBD5E1;
   --text-inverse: #0B1623;
 
   /* Status */

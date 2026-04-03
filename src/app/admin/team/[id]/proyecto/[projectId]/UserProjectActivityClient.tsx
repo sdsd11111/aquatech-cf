@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { formatTimeEcuador, formatDateLongEcuador } from '@/lib/date-utils'
 
 // Inline SVG icons to avoid lucide-react webpack bundling issues
 const svgProps = (size: number, style?: React.CSSProperties, className?: string) => ({
@@ -87,12 +88,8 @@ export default function UserProjectActivityClient() {
     const groups: { [key: string]: any[] } = {}
     
     logs.forEach((event: any) => {
-      const dateKey = new Date(event.timestamp).toLocaleDateString('es-ES', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      })
+      const dateKey = formatDateLongEcuador(event.timestamp)
+
       
       if (!groups[dateKey]) groups[dateKey] = []
       groups[dateKey].push(event)
@@ -114,9 +111,7 @@ export default function UserProjectActivityClient() {
   if (!activityData) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}><strong>Bitácora vacía</strong></div>
 
   const formatTime = (dateValue: string) => {
-    return new Date(dateValue).toLocaleTimeString('es-ES', { 
-      hour: '2-digit', minute: '2-digit' 
-    })
+    return formatTimeEcuador(dateValue)
   }
 
   const getEventIconDetails = (type: string, dataParams: any) => {
@@ -294,12 +289,12 @@ export default function UserProjectActivityClient() {
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-md)' }}>
                                 <div style={{ padding: 'var(--space-sm)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--success-bg)', textAlign: 'center' }}>
                                     <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>CHECK IN</span>
-                                    <strong style={{ fontSize: '1.1rem', color: 'var(--text)' }}>{new Date(event.data.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</strong>
+                                    <strong style={{ fontSize: '1.1rem', color: 'var(--text)' }}>{formatTimeEcuador(event.data.startTime)}</strong>
                                 </div>
                                 <div style={{ padding: 'var(--space-sm)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--danger-bg)', textAlign: 'center' }}>
                                     <span style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>CHECK OUT</span>
                                     <strong style={{ fontSize: '1.1rem', color: 'var(--text)' }}>
-                                        {event.data.endTime ? new Date(event.data.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}
+                                        {event.data.endTime ? formatTimeEcuador(event.data.endTime) : '--:--'}
                                     </strong>
                                 </div>
                                 <div style={{ padding: 'var(--space-sm)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--info-bg)', textAlign: 'center' }}>

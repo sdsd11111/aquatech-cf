@@ -14,8 +14,10 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
       client: true,
       phases: { orderBy: { displayOrder: 'asc' } },
       team: { include: { user: true } },
-      gallery: { orderBy: { createdAt: 'desc' }, take: 24 }, // Limit gallery preview
-      expenses: { orderBy: { date: 'desc' } }, // Keep all for correct budget calculation
+      expenses: { 
+        orderBy: { date: 'desc' },
+        include: { user: true }
+      },
       dayRecords: { 
         orderBy: { createdAt: 'desc' },
         take: 15, // Only recent logs
@@ -23,7 +25,7 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
       },
       chatMessages: {
         orderBy: { createdAt: 'desc' },
-        take: 20, // Only recent messages for fast loading
+        take: 100, // Fetch more for media enrichment
         include: { 
           user: true, 
           phase: true,
