@@ -745,15 +745,17 @@ export default function TeamMemberPage() {
         )}
       </div>
 
-      <AppointmentModal 
-        isOpen={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setEditingEvent(null); }}
-        onSave={handleSaveAppointment}
-        onDelete={handleDeleteAppointment}
-        initialData={editingEvent}
-        userId={Number(userId)}
-        projects={allProjects}
-      />
+      {isModalOpen && (
+        <AppointmentModal 
+          isOpen={isModalOpen}
+          onClose={() => { setIsModalOpen(false); setEditingEvent(null); }}
+          onSave={handleSaveAppointment}
+          onDelete={handleDeleteAppointment}
+          initialData={editingEvent}
+          userId={Number(userId)}
+          projects={allProjects}
+        />
+      )}
     </div>
   )
 }

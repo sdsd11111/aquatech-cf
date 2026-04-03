@@ -117,17 +117,19 @@ export default function AdminCalendarClient({ operators, projects }: AdminCalend
         </div>
       </div>
 
-      <AppointmentModal 
-        isOpen={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setEditingEvent(null); }}
-        onSave={handleSaveAppointment}
-        onDelete={handleDeleteAppointment}
-        initialData={editingEvent}
-        userId={selectedOperatorId === 'all' ? 0 : Number(selectedOperatorId)} // This will be handled by the specialized modal
-        projects={projects}
-        operators={operators} // New prop for admin selection
-        isAdminView={true}
-      />
+      {isModalOpen && (
+        <AppointmentModal 
+          isOpen={isModalOpen}
+          onClose={() => { setIsModalOpen(false); setEditingEvent(null); }}
+          onSave={handleSaveAppointment}
+          onDelete={handleDeleteAppointment}
+          initialData={editingEvent}
+          userId={selectedOperatorId === 'all' ? 0 : Number(selectedOperatorId)} // This will be handled by the specialized modal
+          projects={projects}
+          operators={operators} // New prop for admin selection
+          isAdminView={true}
+        />
+      )}
 
       <CalendarAssistant />
 

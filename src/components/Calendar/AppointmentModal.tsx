@@ -39,6 +39,7 @@ export default function AppointmentModal({
 
   useEffect(() => {
     if (isOpen) {
+      setLoading(false) // Force reset loading on open
       if (initialData) {
         setFormData({
           title: initialData.title || '',
@@ -114,10 +115,11 @@ export default function AppointmentModal({
       <div className="card" style={{ width: '100%', maxWidth: '500px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-active)' }}>
         <div className="card-header">
           <h3 className="card-title">{initialData?.id ? 'Editar Agendamiento' : 'Nuevo Agendamiento'}</h3>
-          <button className="btn btn-ghost" onClick={onClose}>✕</button>
+          <button className="btn btn-ghost" onClick={onClose} type="button">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+          {/* ... (form fields unchanged) ... */}
           <div className="form-group">
             <label className="form-label">Título de la Actividad</label>
             <input 
@@ -218,7 +220,8 @@ export default function AppointmentModal({
                   if (confirm('¿Estás seguro de eliminar esta tarea?')) {
                     setLoading(true);
                     try { 
-                      await onDelete(initialData.id); 
+                      // No esperamos al parent para cerrar, así la UI es instantánea
+                      onDelete(initialData.id); 
                       onClose(); 
                     } catch (error) { 
                       alert('Error eliminando'); 
@@ -228,10 +231,10 @@ export default function AppointmentModal({
                 }}
                 disabled={loading}
               >
-                Eliminar
+                {loading ? 'Eliminando...' : 'Eliminar'}
               </button>
             )}
-            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose} disabled={loading}>
+            <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={onClose}>
               Cancelar
             </button>
             <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
@@ -241,5 +244,5 @@ export default function AppointmentModal({
         </form>
       </div>
     </div>
-  )
+  );
 }
