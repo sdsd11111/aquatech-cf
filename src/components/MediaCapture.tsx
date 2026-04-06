@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 
 // Inline SVG icons to avoid lucide-react webpack bundling issues
 const svgProps = (size: number) => ({
@@ -11,7 +11,6 @@ const svgProps = (size: number) => ({
 const Mic = ({ size = 24 }: any) => <svg {...svgProps(size)}><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
 const Video = ({ size = 24 }: any) => <svg {...svgProps(size)}><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
 const Square = ({ size = 24 }: any) => <svg {...svgProps(size)}><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-const Play = ({ size = 24 }: any) => <svg {...svgProps(size)}><polygon points="6 3 20 12 6 21 6 3"/></svg>
 const Trash2 = ({ size = 24 }: any) => <svg {...svgProps(size)}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
 const Loader2 = ({ size = 24, className }: any) => <svg {...svgProps(size)} className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
 const CheckCircle2 = ({ size = 24 }: any) => <svg {...svgProps(size)}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
@@ -36,30 +35,26 @@ export default function MediaCapture({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [transcription, setTranscription] = useState('')
   const [timer, setTimer] = useState(0)
+  const [recordedDuration, setRecordedDuration] = useState(0)
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioRecorderRef = useRef<MediaRecorder | null>(null) // Separate audio recorder for video transcription
   const timerRef = useRef<any>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [stream, setStream] = useState<MediaStream | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const chunksRef = useRef<Blob[]>([])
-
-  // Preview management
-  useEffect(() => {
-    if (mode === 'video' && videoRef.current && stream && isRecording) {
-      videoRef.current.srcObject = stream
-    }
-  }, [stream, isRecording, mode])
+  const audioChunksRef = useRef<Blob[]>([]) // Separate audio chunks
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
       }
-      stopTimer()
+      if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [stream])
+  }, [])
 
   const getSupportedMimeType = (mediaType: 'audio' | 'video'): string => {
     const candidates = mediaType === 'video'
@@ -76,9 +71,9 @@ export default function MediaCapture({
 
   const startRecording = async () => {
     try {
-      // Clear previous stream if any
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
+      // Clear previous stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
       }
 
       const newStream = await navigator.mediaDevices.getUserMedia({
@@ -86,37 +81,69 @@ export default function MediaCapture({
         video: mode === 'video' ? { facingMode } : false
       })
 
-      setStream(newStream)
+      streamRef.current = newStream
 
+      // Attach live preview for video
       if (mode === 'video' && videoRef.current) {
         videoRef.current.srcObject = newStream
+        videoRef.current.play().catch(() => {}) // Ignore autoplay errors
       }
 
+      // --- Main recorder (video+audio or audio-only) ---
       const supportedMime = getSupportedMimeType(mode)
       const options: MediaRecorderOptions = supportedMime ? { mimeType: supportedMime } : {}
       const recorder = new MediaRecorder(newStream, options)
       const actualMime = recorder.mimeType || (mode === 'video' ? 'video/webm' : 'audio/webm')
       
+      chunksRef.current = []
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data)
       }
 
-      recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: actualMime })
-        setMediaBlob(blob)
-        setPreviewUrl(URL.createObjectURL(blob))
-        
-        // Auto-transcribe, then always call onCapture even if transcription fails
-        await handleTranscription(blob)
-        
-        // Clean up stream
-        // Clean up stream
-        newStream.getTracks().forEach(track => track.stop())
-        setStream(null)
+      // --- Separate AUDIO-ONLY recorder for video transcription ---
+      let audioRecorder: MediaRecorder | null = null
+      if (mode === 'video') {
+        // Create an audio-only stream from the same microphone tracks
+        const audioTracks = newStream.getAudioTracks()
+        if (audioTracks.length > 0) {
+          const audioOnlyStream = new MediaStream(audioTracks)
+          const audioMime = getSupportedMimeType('audio')
+          const audioOpts: MediaRecorderOptions = audioMime ? { mimeType: audioMime } : {}
+          audioRecorder = new MediaRecorder(audioOnlyStream, audioOpts)
+          audioChunksRef.current = []
+          audioRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data)
+          }
+          audioRecorderRef.current = audioRecorder
+        }
       }
 
-      chunksRef.current = []
+      recorder.onstop = async () => {
+        const videoBlob = new Blob(chunksRef.current, { type: actualMime })
+        setMediaBlob(videoBlob)
+        setPreviewUrl(URL.createObjectURL(videoBlob))
+        setRecordedDuration(timer)
+
+        // For transcription: use audio-only blob if available, otherwise fall back to full blob
+        let transcriptionBlob: Blob
+        if (mode === 'video' && audioChunksRef.current.length > 0) {
+          const audioMime = audioRecorderRef.current?.mimeType || 'audio/webm'
+          transcriptionBlob = new Blob(audioChunksRef.current, { type: audioMime })
+        } else {
+          transcriptionBlob = videoBlob
+        }
+
+        // Transcribe the AUDIO blob, but pass the VIDEO blob to onCapture for gallery
+        await handleTranscription(transcriptionBlob, videoBlob)
+        
+        // Clean up stream
+        newStream.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+
+      // Start all recorders
       recorder.start()
+      if (audioRecorder) audioRecorder.start()
       mediaRecorderRef.current = recorder
       setIsRecording(true)
       startTimer()
@@ -128,39 +155,51 @@ export default function MediaCapture({
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      // Stop audio recorder first (if exists)
+      if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+        audioRecorderRef.current.stop()
+      }
       mediaRecorderRef.current.stop()
       setIsRecording(false)
+      setRecordedDuration(timer)
       stopTimer()
+
+      // Stop live preview
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
     }
   }
 
-  const handleTranscription = async (blob: Blob) => {
+  const handleTranscription = async (audioBlob: Blob, originalBlob: Blob) => {
     setIsProcessing(true)
     let transcribedText = ''
     try {
       const formData = new FormData()
-      // Always send as audio MIME for best Groq compatibility
-      const ext = mode === 'video' ? 'video.webm' : 'audio.webm'
-      formData.append('file', blob, ext)
+      // Always send as audio for Groq/Whisper compatibility
+      formData.append('file', new File([audioBlob], 'audio.webm', { type: 'audio/webm' }))
 
       const res = await fetch('/api/media/transcribe', {
         method: 'POST',
         body: formData
       })
 
-      if (!res.ok) throw new Error('Transcription failed')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        console.error('Transcription response error:', errData)
+        throw new Error(errData.details || 'Transcription failed')
+      }
       
       const data = await res.json()
       transcribedText = data.text || ''
       setTranscription(transcribedText)
     } catch (err) {
       console.error('Transcription error:', err)
-      setTranscription(mode === 'video' ? '(Video guardado sin transcripción)' : 'Error al transcribir.')
+      setTranscription('Error al transcribir.')
     } finally {
       setIsProcessing(false)
-      // ALWAYS call onCapture so the parent can upload to gallery
-      // even if transcription failed
-      onCapture(blob, mode, transcribedText)
+      // ALWAYS call onCapture with the ORIGINAL blob (video or audio) for gallery upload
+      onCapture(originalBlob, mode, transcribedText)
     }
   }
 
@@ -182,10 +221,12 @@ export default function MediaCapture({
   }
 
   const reset = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
     setMediaBlob(null)
     setPreviewUrl(null)
     setTranscription('')
     setTimer(0)
+    setRecordedDuration(0)
     setIsProcessing(false)
     setIsRecording(false)
   }
@@ -227,7 +268,12 @@ export default function MediaCapture({
               animation: isRecording ? 'pulse-red 1.5s infinite' : 'none'
             }} />
             <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: isRecording ? 'var(--danger)' : 'var(--text-muted)' }}>
-              {isRecording ? `GRABANDO - ${formatTime(timer)}` : (transcription ? 'Transmisión Completada' : mode === 'video' ? 'Video' : 'Audio')}
+              {isRecording 
+                ? `GRABANDO - ${formatTime(timer)}` 
+                : transcription 
+                  ? `Completado (${formatTime(recordedDuration)})` 
+                  : mode === 'video' ? 'Video' : 'Audio'
+              }
             </span>
           </div>
         )}
@@ -247,16 +293,54 @@ export default function MediaCapture({
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
         {mode === 'video' && (
-          <div style={{ display: (isRecording || previewUrl) ? 'block' : 'none', width: '100%', maxWidth: '320px', aspectRatio: '16/9', borderRadius: '12px', overflow: 'hidden', backgroundColor: 'black', position: 'relative', margin: '0 auto' }}>
+          <div style={{ 
+            display: (isRecording || previewUrl) ? 'block' : 'none', 
+            width: '100%', 
+            maxWidth: '320px', 
+            borderRadius: '12px', 
+            overflow: 'hidden', 
+            backgroundColor: 'black', 
+            position: 'relative', 
+            margin: '0 auto' 
+          }}>
+            {/* Live preview during recording */}
             <video 
               ref={videoRef} 
               autoPlay 
               muted 
               playsInline 
-              style={{ display: isRecording ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover' }} 
+              style={{ 
+                display: isRecording ? 'block' : 'none', 
+                width: '100%', 
+                height: 'auto',
+                maxHeight: '200px',
+                objectFit: 'cover' 
+              }} 
             />
+            {/* Playback after recording - with duration info */}
             {!isRecording && previewUrl && (
-              <video src={previewUrl} controls style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div>
+                <video 
+                  src={previewUrl} 
+                  controls 
+                  playsInline
+                  style={{ width: '100%', height: 'auto', maxHeight: '200px', objectFit: 'cover' }} 
+                />
+                <div style={{ 
+                  padding: '6px 10px', 
+                  backgroundColor: 'rgba(0,0,0,0.7)', 
+                  color: '#fff',
+                  fontSize: '0.75rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span>⏱ Duración: {formatTime(recordedDuration)}</span>
+                  <span style={{ opacity: 0.7 }}>
+                    {mediaBlob ? `${(mediaBlob.size / (1024 * 1024)).toFixed(1)} MB` : ''}
+                  </span>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -276,6 +360,34 @@ export default function MediaCapture({
           </div>
         )}
 
+        {/* Camera toggle button */}
+        {mode === 'video' && !isRecording && !transcription && (
+          <button
+            type="button"
+            onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')}
+            style={{ 
+              fontSize: '0.75rem', 
+              padding: '6px 14px', 
+              borderRadius: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            {facingMode === 'user' ? '📷 Frontal' : '📷 Trasera'}
+          </button>
+        )}
+
+        {/* Record / Stop buttons */}
         {!isRecording && !transcription && (
           <button 
             type="button"
@@ -325,29 +437,10 @@ export default function MediaCapture({
           </button>
         )}
 
-        {mode === 'video' && !isRecording && !transcription && (
-          <button
-            type="button"
-            onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')}
-            className="btn-secondary"
-            style={{ 
-              fontSize: '0.75rem', 
-              padding: '4px 12px', 
-              borderRadius: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 12c0-1.66 4-3 9-3s9 1.34 9 3"/><path d="M5 7s1 5 1 9"/><path d="M19 7s-1 5-1 9"/><path d="M15 5c0 1.1-1.34 2-3 2s-3-.9-3-2 1.34-2 3-2 3 .9 3 2z"/></svg>
-            Cámara: {facingMode === 'user' ? 'Frontal' : 'Trasera'}
-          </button>
-        )}
-
         {isProcessing && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)' }}>
             <Loader2 size={18} className="animate-spin" />
-            <span style={{ fontSize: '0.85rem' }}>Procesando con IA...</span>
+            <span style={{ fontSize: '0.85rem' }}>Transcribiendo audio con IA...</span>
           </div>
         )}
 
