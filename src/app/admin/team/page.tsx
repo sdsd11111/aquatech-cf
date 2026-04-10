@@ -205,7 +205,7 @@ export default function TeamPage() {
             </h3>
             <div className="grid-responsive">
               {management.map(u => (
-                <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} />
+                <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} currentUserId={currentUserId} />
               ))}
             </div>
           </div>
@@ -220,7 +220,7 @@ export default function TeamPage() {
             </h3>
             <div className="grid-responsive">
               {operators.map(u => (
-                <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} />
+                <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} currentUserId={currentUserId} />
               ))}
               {operators.length === 0 && (
                 <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-deep)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
@@ -240,7 +240,7 @@ export default function TeamPage() {
             </h3>
             <div className="grid-responsive">
               {subcontratistas.map(u => (
-                <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} />
+                <UserCard key={u.id} user={u} onDelete={handleDelete} formatDate={formatDate} currentUserRole={currentUserRole} currentUserId={currentUserId} />
               ))}
               {subcontratistas.length === 0 && (
                 <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-deep)', borderRadius: '24px', border: '2px dashed var(--border-color)' }}>
@@ -395,11 +395,8 @@ export default function TeamPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
                       {[
                         { val: 'OPERATOR', label: 'Operador', icon: '👷' },
-                        { val: 'SUBCONTRATISTA', label: 'Subcon', icon: '🏗️' },
-                        { val: 'ADMINISTRADORA', label: 'Admin (O)', icon: '💼' },
-                        { val: 'ADMIN', label: 'Admin (G)', icon: '📈' },
-                        { val: 'SUPERADMIN', label: 'Su-Admin', icon: '👑' }
-                      ].filter(role => isSuperAdmin || (role.val !== 'SUPERADMIN' && role.val !== 'ADMIN')).map(role => (
+                        { val: 'ADMIN', label: 'Administrador/a', icon: '💼' }
+                      ].map(role => (
                         <div 
                           key={role.val}
                           onClick={() => setFormData({ ...formData, role: role.val })}
@@ -520,7 +517,7 @@ export default function TeamPage() {
   )
 }
 
-function UserCard({ user, onDelete, formatDate, currentUserRole }: { user: any, onDelete: (id: number) => void, formatDate: (d: any) => string, currentUserRole: string }) {
+function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }: { user: any, onDelete: (id: number) => void, formatDate: (d: any) => string, currentUserRole: string, currentUserId: number | null }) {
   const isSuperAdminUser = user.role === 'SUPERADMIN'
   const isCurrentUserSuperAdmin = currentUserRole === 'SUPERADMIN'
 
@@ -531,7 +528,12 @@ function UserCard({ user, onDelete, formatDate, currentUserRole }: { user: any, 
     user.role === 'SUBCONTRATISTA' ? '#F59E0B' : 
     '#6366f1'
   
-  const canDelete = isCurrentUserSuperAdmin || (!isSuperAdminUser)
+  const canDelete = isCurrentUserSuperAdmin || (
+    (currentUserRole === 'ADMIN' || currentUserRole === 'ADMINISTRADORA' || currentUserRole === 'ADMINISTRADOR') && 
+    user.role !== 'OPERATOR' && 
+    user.role !== 'SUPERADMIN' &&
+    user.id !== currentUserId
+  )
 
   return (
     <Link 
