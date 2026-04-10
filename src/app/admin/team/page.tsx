@@ -92,6 +92,32 @@ export default function TeamPage() {
     setFormData({ ...formData, username: cleanName })
   }
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, image: reader.result as string }))
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({ 
+      name: '', 
+      username: '', 
+      password: '', 
+      role: 'OPERATOR', 
+      email: '', 
+      phone: '', 
+      image: null, 
+      branch: '', 
+      permissions: ['proyectos', 'cotizaciones', 'inventario', 'recursos'] 
+    })
+    setError('')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -110,7 +136,7 @@ export default function TeamPage() {
       if (!res.ok) throw new Error(data.error || data.details || 'Error al crear usuario')
       
       setShowModal(false)
-      setFormData({ name: '', username: '', password: '', role: 'OPERATOR', email: '', phone: '', image: null, branch: '', permissions: ['proyectos', 'cotizaciones', 'inventario', 'recursos'] })
+      resetForm()
       fetchUsers()
     } catch (err: any) {
       setError(err.message)
@@ -323,7 +349,7 @@ export default function TeamPage() {
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>Configura los datos personales y permisos de acceso.</p>
               </div>
               <button 
-                onClick={() => setShowModal(false)} 
+                onClick={() => { setShowModal(false); resetForm(); }} 
                 style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text)', cursor: 'pointer', padding: '10px', borderRadius: '14px', display: 'flex', transition: 'all 0.2s' }}
                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(240, 68, 68, 0.15)'}
                 onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
@@ -377,6 +403,13 @@ export default function TeamPage() {
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                     </div>
                   </div>
+                  <input 
+                    type="file" 
+                    id="user-image-upload" 
+                    accept="image/*" 
+                    onChange={handleImageChange} 
+                    style={{ display: 'none' }} 
+                  />
                   <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: '1.4' }}>Recomendado: Cuadrado<br/>formato JPG o PNG</p>
                 </div>
 
@@ -526,7 +559,7 @@ export default function TeamPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '20px' }}>
-                <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: '18px', borderRadius: '18px', fontWeight: 'bold' }} onClick={() => setShowModal(false)}>Descartar</button>
+                <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: '18px', borderRadius: '18px', fontWeight: 'bold' }} onClick={() => { setShowModal(false); resetForm(); }}>Descartar</button>
                 <button type="submit" className="btn btn-primary" style={{ flex: 2, padding: '18px', borderRadius: '18px', fontWeight: 'bold', fontSize: '1rem', boxShadow: '0 15px 30px rgba(56, 189, 248, 0.3)' }}>
                   Registrar Miembro del Equipo
                 </button>
