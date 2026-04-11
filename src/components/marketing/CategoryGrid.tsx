@@ -2,95 +2,95 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { motion } from 'framer-motion'
+
+const categories = [
+  {
+    title: 'Nuestros locales',
+    subtitle: 'Loja • Zamora • Machala',
+    image: 'https://cesarweb.b-cdn.net/home/locales-lifestyle.webp',
+    link: '/tiendas',
+    darkText: false
+  },
+  {
+    title: 'Hidromasajes',
+    subtitle: 'El paraíso de la relajación',
+    image: 'https://cesarweb.b-cdn.net/home/hidromasaje-card.webp',
+    link: '/productos/jacuzzis',
+    darkText: true
+  },
+  {
+    title: 'Piletas',
+    subtitle: 'El arte del agua en movimiento',
+    image: 'https://cesarweb.b-cdn.net/home/piletas-card.webp',
+    link: '/servicios/piletas',
+    darkText: false
+  },
+  {
+    title: 'Insumos',
+    subtitle: 'Ingeniería técnica y mantenimiento',
+    image: 'https://cesarweb.b-cdn.net/home/accesorios-card.webp',
+    link: '/servicios/accesorios',
+    darkText: true
+  }
+]
 
 export default function CategoryGrid() {
   return (
-    <section className="bg-white w-full border-t border-gray-100">
-      <div className="flex flex-col w-full">
-        
-        {/* Row 1: Full-width 50/50 Split */}
-        <div className="grid grid-cols-1 md:grid-cols-2 w-full">
-          {/* Card 1: Nuestros Locales */}
-          <div className="relative h-[450px] md:h-[550px] lg:h-[600px] w-full overflow-hidden group">
+    <section className="bg-[#f5f5f7] py-4 px-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-[2000px] mx-auto">
+        {categories.map((cat, i) => (
+          <motion.div 
+            key={i}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, delay: i * 0.1 }}
+            className="relative aspect-square md:aspect-auto md:h-[700px] lg:h-[800px] w-full bg-white rounded-[28px] overflow-hidden group shadow-sm hover:shadow-xl transition-all duration-700"
+          >
+            {/* Background Image */}
             <Image 
-              src="https://cesarweb.b-cdn.net/home/locales-lifestyle.webp" 
-              alt="Locales Aquatech" 
+              src={cat.image} 
+              alt={cat.title} 
               fill
-              className="object-cover transition-transform duration-[4000ms] group-hover:scale-105"
+              className="object-cover transition-transform duration-[6000ms] ease-out group-hover:scale-105"
             />
-            <div className="absolute inset-0 bg-black/15 group-hover:bg-black/5 transition-colors" />
-            <div className="absolute bottom-10 left-10 z-10">
-              <h3 className="text-white text-[32px] md:text-[42px] font-[700] tracking-tight mb-2">
-                Nuestros locales
+            
+            {/* Overlay Gradient for readability */}
+            <div className={`absolute inset-0 ${cat.darkText ? 'bg-black/[0.02]' : 'bg-black/10'}`} />
+
+            {/* Content */}
+            <div className="absolute inset-x-0 top-16 text-center px-10 z-10">
+              <h3 className={`text-[32px] md:text-[48px] font-[700] tracking-tight mb-2 leading-tight ${cat.darkText ? 'text-[#1d1d1f]' : 'text-white'}`}>
+                {cat.title}
               </h3>
-              <p className="text-white/90 text-[17px] md:text-[20px] font-[400] mb-6">Loja • Zamora • Machala</p>
-              <Link href="/tiendas" className="bg-white text-black px-6 py-2.5 rounded-full text-[14px] font-[600] hover:bg-black hover:text-white transition-all shadow-lg">
-                 Visítanos
-              </Link>
+              <p className={`text-[19px] md:text-[21px] font-[400] mb-8 ${cat.darkText ? 'text-[#86868b]' : 'text-white/90'}`}>
+                {cat.subtitle}
+              </p>
+              
+              <div className="flex justify-center gap-4">
+                <Link 
+                  href={cat.link}
+                  className={`px-7 py-3 rounded-full text-[15px] font-[600] transition-all
+                    ${cat.darkText 
+                      ? 'bg-[#0071e3] text-white hover:bg-[#0077ed]' 
+                      : 'bg-white text-black hover:bg-gray-100'}`}
+                >
+                  Más información
+                </Link>
+                <Link 
+                  href={cat.link}
+                  className={`px-7 py-3 rounded-full text-[15px] font-[600] border transition-all
+                    ${cat.darkText 
+                      ? 'border-[#0071e3] text-[#0071e3] hover:bg-[#0071e3] hover:text-white' 
+                      : 'border-white text-white hover:bg-white hover:text-black'}`}
+                >
+                  Comprar
+                </Link>
+              </div>
             </div>
-          </div>
-
-          {/* Card 2: Hidromasajes */}
-          <div className="relative h-[450px] md:h-[550px] lg:h-[600px] w-full overflow-hidden group bg-[#f5f5f7] flex flex-col items-center justify-center p-10 text-center border-l border-white">
-             <div className="relative z-10 mb-8">
-                <h3 className="text-[#1d1d1f] text-[32px] md:text-[42px] font-[700] tracking-tight mb-2">Hidromasajes</h3>
-                <p className="text-[#86868b] text-[17px] md:text-[20px] font-[400]">El paraíso de la relajación</p>
-             </div>
-             <div className="relative w-full h-[300px]">
-                <Image 
-                  src="https://cesarweb.b-cdn.net/home/hidromasaje-card.webp" 
-                  alt="Hidromasaje Premium" 
-                  fill
-                  className="object-contain transition-transform duration-1000 group-hover:scale-105"
-                />
-             </div>
-             <Link href="/productos/jacuzzis" className="mt-8 bg-[#0071e3] text-white px-8 py-3 rounded-full text-[15px] font-[600] hover:bg-black transition-all shadow-md">
-               Más información
-             </Link>
-          </div>
-        </div>
-
-        {/* Row 2: Full-width 50/50 Split */}
-        <div className="grid grid-cols-1 md:grid-cols-2 w-full border-t border-white">
-          {/* Card 3: Piletas & Cascadas */}
-          <div className="relative h-[450px] md:h-[550px] lg:h-[600px] w-full overflow-hidden group bg-white flex flex-col items-center justify-center p-10 text-center">
-             <div className="mb-8">
-                <h3 className="text-[#1d1d1f] text-[32px] md:text-[42px] font-[700] mb-2 tracking-tight">Piletas & Cascadas</h3>
-                <p className="text-[#86868b] text-[17px]">El arte del agua en movimiento</p>
-             </div>
-             <div className="relative w-full h-[300px]">
-                <Image 
-                  src="https://cesarweb.b-cdn.net/home/piletas-card.webp" 
-                  alt="Piletas y Cascadas Aquatech" 
-                  fill
-                  className="object-cover rounded-[24px]"
-                />
-             </div>
-             <Link href="/servicios/piletas" className="mt-8 bg-[#0071e3] text-white px-8 py-3 rounded-full text-[15px] font-[600] hover:bg-black transition-all">
-               Más información
-             </Link>
-          </div>
-
-          {/* Card 4: Insumos & Accesorios */}
-          <div className="relative h-[450px] md:h-[550px] lg:h-[600px] w-full overflow-hidden group bg-[#fafafa] flex flex-col items-center justify-center p-10 text-center border-l border-gray-50">
-             <div className="mb-8">
-                <h3 className="text-[#1d1d1f] text-[32px] md:text-[42px] font-[700] mb-2 tracking-tight">Insumos & Accesorios</h3>
-                <p className="text-[#86868b] text-[17px]">Mantenimiento e ingeniería técnica</p>
-             </div>
-             <div className="relative w-full h-[300px]">
-                <Image 
-                  src="https://cesarweb.b-cdn.net/home/accesorios-card.webp" 
-                  alt="Accesorios para piscinas" 
-                  fill
-                  className="object-contain"
-                />
-             </div>
-             <Link href="/servicios/accesorios" className="mt-8 bg-[#0071e3] text-white px-8 py-3 rounded-full text-[15px] font-[600] hover:bg-black transition-all">
-               Más información
-             </Link>
-          </div>
-        </div>
-
+          </motion.div>
+        ))}
       </div>
     </section>
   )

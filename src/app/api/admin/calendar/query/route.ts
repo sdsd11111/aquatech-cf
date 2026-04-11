@@ -75,7 +75,15 @@ export async function POST(req: Request) {
     }
     const systemPrompt = `Eres el "Asistente de Inteligencia" de Aquatech para la gestión de Agenda y Operadores. 
 
-TU OBJETIVO: Resolver dudas sobre el calendario basándote ÚNICAMENTE en datos verídicos.
+### EQUIPO REGISTRADO:
+${context.operators.join('\n')}
+
+### AGENDA DE EVENTOS (Citas actuales/próximas):
+${context.appointments.length > 0 
+  ? context.appointments.map(a => `- ${a.operator}: ${a.title} (${a.start} a ${a.end}) [${a.status}]`).join('\n')
+  : 'No hay eventos registrados.'}
+
+TU OBJETIVO: Resolver dudas sobre el calendario basándote ÚNICAMENTE en los datos de arriba.
 
 REGLAS CRÍTICAS (NO NEGOCIABLES):
 1. **PROHIBIDO ALUCINAR O INVENTAR**: Si un dato no está en la "AGENDA DE EVENTOS" o "EQUIPO REGISTRADO", di que no tienes esa información. No inventes nombres ni horarios.

@@ -35,11 +35,10 @@ const slides = [
 export default function Hero() {
   const [index, setIndex] = useState(0)
 
-  // Auto-play every 6 seconds
   useEffect(() => {
     const timer = setInterval(() => {
       setIndex((prev) => (prev + 1) % slides.length)
-    }, 6000)
+    }, 8000)
     return () => clearInterval(timer)
   }, [])
 
@@ -47,19 +46,18 @@ export default function Hero() {
   const prevSlide = () => setIndex((prev) => (prev - 1 + slides.length) % slides.length)
 
   return (
-    <section className="relative w-full h-[100vh] bg-black overflow-hidden">
+    <section className="relative w-full h-[100vh] bg-black overflow-hidden font-sans">
       <AnimatePresence mode="wait">
         <motion.div
           key={index}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, scale: 1.1 }}
+          animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.2, ease: "easeInOut" }}
+          transition={{ duration: 1.5, ease: "easeOut" }}
           className="absolute inset-0"
         >
-          {/* Background Image */}
           <picture>
-            <source media="(max-width: 768px)" srcSet={slides[index].mobileImage || slides[index].image} />
+            <source media="(max-width: 768px)" srcSet={slides[index].mobileImage} />
             <Image 
               src={slides[index].image} 
               alt="Aquatech Slide" 
@@ -68,74 +66,59 @@ export default function Hero() {
               priority
             />
           </picture>
-          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-black/30" />
         </motion.div>
       </AnimatePresence>
 
-      {/* Content Overlay */}
-      <div className="relative h-full w-full px-12 md:px-24 flex flex-col justify-center z-10 pointer-events-none">
+      <div className="relative h-full w-full px-6 md:px-20 flex flex-col justify-end pb-32 z-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={index}
-            initial={{ y: 30, opacity: 0 }}
+            initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -30, opacity: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="max-w-4xl"
+            exit={{ y: -20, opacity: 0 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            className="max-w-5xl"
           >
-            <h1 className="font-brand font-[700] text-[56px] md:text-[80px] lg:text-[110px] text-white tracking-tight leading-[1] mb-6 drop-shadow-md">
+            <h1 className="text-white text-[48px] md:text-[80px] lg:text-[100px] font-[700] tracking-tighter leading-[0.9] mb-8">
               {slides[index].title} <br />
-              <span className="text-[#38BDF8]">{slides[index].highlight}</span>
+              <span className="text-white/70">{slides[index].highlight}</span>
             </h1>
             
-            <div className="bg-[#00DDAA] inline-block px-6 py-3 rounded-[16px] mb-10 shadow-xl">
-              <span className="text-black font-[800] text-[24px] md:text-[32px] lg:text-[40px] tracking-tight">
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="bg-white text-black px-8 py-4 rounded-full text-[17px] font-[600] cursor-pointer hover:bg-white/90 transition-all">
                 {slides[index].promo}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <div className="bg-white/10 backdrop-blur-xl inline-flex items-center gap-4 px-8 py-6 rounded-[24px] border border-white/20 shadow-2xl self-start">
-                <div className="flex flex-col">
-                  <span className="text-white font-[700] text-[20px] md:text-[28px] lg:text-[36px] leading-[1]">
-                    {slides[index].gracia}
-                  </span>
-                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-8 py-4 rounded-full text-[17px] font-[600]">
+                {slides[index].gracia}
               </div>
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Navigation Arrows */}
-      <div className="absolute inset-y-0 left-8 flex items-center z-20">
-        <button 
-          onClick={prevSlide}
-          className="w-12 h-12 rounded-full bg-black/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-white/50 hover:bg-black/60 hover:text-white transition-all pointer-events-auto"
-        >
-          <ChevronLeft size={32} />
-        </button>
-      </div>
-      <div className="absolute inset-y-0 right-8 flex items-center z-20">
-        <button 
-          onClick={nextSlide}
-          className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-black/60 transition-all pointer-events-auto"
-        >
-          <ChevronRight size={32} />
-        </button>
-      </div>
-
-      {/* Pagination dots */}
-      <div className="absolute bottom-12 right-12 md:right-24 flex gap-3 z-20 pointer-events-auto">
-        {slides.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setIndex(i)}
-            className={`h-1.5 rounded-full transition-all duration-500 ${
-              index === i ? 'w-10 bg-white' : 'w-1.5 bg-white/30'
-            }`}
-          />
-        ))}
+      {/* Control UI */}
+      <div className="absolute bottom-12 left-6 md:left-20 flex items-center gap-6 z-20">
+        <div className="flex gap-2">
+            <button onClick={prevSlide} className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/10 hover:bg-white/20 transition-all">
+                <ChevronLeft size={24} />
+            </button>
+            <button onClick={nextSlide} className="p-3 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/10 hover:bg-white/20 transition-all">
+                <ChevronRight size={24} />
+            </button>
+        </div>
+        
+        <div className="flex gap-3">
+            {slides.map((_, i) => (
+            <button
+                key={i}
+                onClick={() => setIndex(i)}
+                className={`h-1 rounded-full transition-all duration-500 ${
+                index === i ? 'w-12 bg-white' : 'w-4 bg-white/30'
+                }`}
+            />
+            ))}
+        </div>
       </div>
     </section>
   )

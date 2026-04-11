@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Hero from '@/components/marketing/Hero'
-import { FeaturedProduct } from '@/components/marketing/FeaturedProduct'
+import FeaturedProduct from '@/components/marketing/FeaturedProduct'
 import CategoryGrid from '@/components/marketing/CategoryGrid'
 import Footer from '@/components/marketing/Footer'
 
