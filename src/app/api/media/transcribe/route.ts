@@ -64,8 +64,9 @@ export async function POST(req: Request) {
     // Always provide a filename that Whisper expects
     const safeExt = ext && mimeMap[ext] ? ext : 'm4a'
     groqFormData.append('file', audioBlob, `audio.${safeExt}`)
-    groqFormData.append('model', 'whisper-large-v3-turbo')
+    groqFormData.append('model', 'whisper-large-v3')
     groqFormData.append('language', 'es')
+    groqFormData.append('prompt', 'Este es un audio sobre gestión de CRM en Aquatech, Loja, Ecuador. Palabras comunes: Mantenimiento, Operador, Agenda, Piscina, Valentín, Cita, Instalación.')
 
     const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',

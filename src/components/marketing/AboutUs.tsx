@@ -1,92 +1,118 @@
 'use client'
 
-import Image from 'next/image'
-import Link from 'next/link'
-import { MapPin, CheckCircle2, Globe2, Compass } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { MapPin, ShieldCheck, Zap, Heart, ArrowRight } from 'lucide-react'
 
 export default function AboutUs() {
+  const cards = [
+    {
+      title: "Matriz Regional",
+      icon: <MapPin size={32} />,
+      points: ["Loja (Matriz Central)", "Malacatos (Riego Ornamental)", "Vilcabamba (Sistemas Premium)", "Yantzaza (Amazonía Industrial)"],
+      desc: "Cobertura total en el sur del Ecuador."
+    },
+    {
+      title: "Filosofía Llave en Mano",
+      icon: <Zap size={32} />,
+      points: ["Diseño Arquitectónico", "Construcción Hidráulica", "Equipamiento de Lujo", "Soporte Post-Venta"],
+      desc: "Usted imagina, nosotros construimos."
+    },
+    {
+      title: "Ingeniería de Vanguardia",
+      icon: <ShieldCheck size={32} />,
+      points: ["Piscinas Residenciales", "Sistemas de Riego", "Potabilización Avanzada", "Tratamiento de Agua"],
+      desc: "Certificación de clase mundial."
+    },
+    {
+      title: "Misión Aquatech",
+      icon: <Heart size={32} />,
+      points: ["Bienestar en el Hogar", "Tecnología Sustentable", "Experiencia de 10+ años", "Compromiso de por vida"],
+      desc: "Vender tranquilidad absoluta."
+    }
+  ]
+
   return (
-    <section className="bg-[#f5f5f7] py-32 md:py-48" id="nosotros">
-      <div className="max-w-[1200px] mx-auto px-6">
+    <section className="bg-white py-32 md:py-48 border-t border-gray-100" id="nosotros">
+      <div className="max-w-[1280px] mx-auto px-6">
         
-        {/* Main Header - Centered & Powerful */}
-        <div className="text-center space-y-8 mb-32">
-          <span className="text-[#004A87] text-[13px] font-[900] uppercase tracking-[0.5em] block">
-            Nuestra Red Regional
-          </span>
-          <h2 className="text-[40px] md:text-[64px] font-[800] text-black leading-[1.1] tracking-tight max-w-[800px] mx-auto">
-            Ingeniería de vanguardia en todo el sur del país.
-          </h2>
-          <p className="text-[20px] md:text-[24px] text-[#86868b] font-[400] max-w-[700px] mx-auto leading-relaxed">
-            Desde la planificación técnica en Matriz Loja hasta el soporte especializado en la Amazonía, dominamos cada fase del ciclo del agua.
-          </p>
+        {/* Header - Center Aligned Editorial Style */}
+        <div className="max-w-[1000px] mb-28">
+            <div className="flex items-center gap-4 mb-8">
+                <div className="w-16 h-1 lg:h-[3px] bg-[#004A87]" />
+                <span className="text-[#004A87] text-[14px] font-[900] uppercase tracking-[0.4em]">Propósito y Presencia</span>
+            </div>
+            <h2 className="text-[42px] md:text-[76px] font-[900] text-black leading-[0.95] tracking-tight mb-10">
+                Líderes en el ciclo <br/> 
+                <span className="text-[#004A87]">integral del agua.</span>
+            </h2>
+            <p className="text-[20px] md:text-[24px] text-gray-500 font-[400] max-w-[700px] leading-relaxed">
+                Aquatech nace de profesionales con larga trayectoria, consolidando el soporte técnico más avanzado del país con un modelo de boutique de ingeniería.
+            </p>
         </div>
 
-        {/* Feature Grid - Clean & Minimalist */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
-          
-          <div className="space-y-6">
-            <div className="w-12 h-12 bg-[#004A87] flex items-center justify-center">
-               <MapPin className="text-white" size={24} />
-            </div>
-            <div className="space-y-2">
-               <h3 className="text-[18px] font-[800] text-black">Matriz Loja</h3>
-               <p className="text-[14px] text-[#86868b] leading-relaxed">
-                  Centro estratégico de diseño y planificación técnica de proyectos hidráulicos.
-               </p>
-            </div>
-          </div>
+        {/* Card Grid - High Gravity Style */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
+           {cards.map((card, idx) => (
+             <motion.div 
+                key={idx}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.1 }}
+                className="group relative bg-[#f9f9f9] border border-gray-100 p-12 lg:p-16 hover:bg-white hover:shadow-[0_80px_160px_-40px_rgba(0,0,0,0.12)] transition-all duration-700"
+             >
+                {/* Visual Label */}
+                <div className="text-[#004A87] mb-10 opacity-80 group-hover:scale-110 group-hover:opacity-100 transition-all duration-500 origin-left">
+                    {card.icon}
+                </div>
 
-          <div className="space-y-6">
-            <div className="w-12 h-12 bg-black flex items-center justify-center">
-               <Globe2 className="text-white" size={24} />
-            </div>
-            <div className="space-y-2">
-               <h3 className="text-[18px] font-[800] text-black">Valles de Riego</h3>
-               <p className="text-[14px] text-[#86868b] leading-relaxed">
-                  Infraestructura optimizada en Malacatos y Vilcabamba para el sector residencial y agrícola.
-               </p>
-            </div>
-          </div>
+                <div className="space-y-8">
+                    <div className="space-y-3">
+                        <h3 className="text-[26px] font-[900] text-black tracking-tight">{card.title}</h3>
+                        <p className="text-[14px] text-gray-400 font-[500] italic">{card.desc}</p>
+                    </div>
 
-          <div className="space-y-6">
-            <div className="w-12 h-12 bg-[#004A87] flex items-center justify-center">
-               <Compass className="text-white" size={24} />
-            </div>
-            <div className="space-y-2">
-               <h3 className="text-[18px] font-[800] text-black">Selva Amazónica</h3>
-               <p className="text-[14px] text-[#86868b] leading-relaxed">
-                  Soporte técnico y suministros industriales estratégicos en la zona de Yantzaza.
-               </p>
-            </div>
-          </div>
+                    <ul className="grid grid-cols-1 gap-4">
+                        {card.points.map((point, i) => (
+                            <li key={i} className="flex items-center gap-4 text-[15px] font-[600] text-gray-700">
+                                <div className="w-2 h-2 bg-[#004A87]" />
+                                {point}
+                            </li>
+                        ))}
+                    </ul>
 
-          <div className="space-y-6">
-            <div className="w-12 h-12 bg-black flex items-center justify-center">
-               <CheckCircle2 className="text-white" size={24} />
-            </div>
-            <div className="space-y-2">
-               <h3 className="text-[18px] font-[800] text-black">Garantía Total</h3>
-               <p className="text-[14px] text-[#86868b] leading-relaxed">
-                  Cada proyecto "llave en mano" asegura la tranquilidad de una inversión de por vida.
-               </p>
-            </div>
-          </div>
-
+                    <div className="pt-8 border-t border-gray-100 flex items-center justify-between group-hover:text-[#004A87] transition-colors">
+                        <span className="text-[12px] font-[900] uppercase tracking-[0.3em]">Explorar detalle</span>
+                        <ArrowRight size={20} className="transform group-hover:translate-x-2 transition-transform" />
+                    </div>
+                </div>
+             </motion.div>
+           ))}
         </div>
 
-        {/* The Slogan - High End Minimalist Highlight */}
-        <div className="mt-40 border-t border-gray-200 pt-20 text-center">
-          <p className="text-[28px] md:text-[42px] font-[800] text-[#004A87] italic tracking-tight mb-12">
-            "El Paraíso en Tu Hogar"
-          </p>
-          <Link 
-            href="/nosotros" 
-            className="inline-block px-14 py-5 bg-black text-white text-[13px] font-[800] uppercase tracking-[0.4em] hover:bg-[#004A87] transition-all rounded-none"
-          >
-            Explorar Nuestra Historia
-          </Link>
-        </div>
+        {/* Global Slogan - Integrated Authority */}
+        <motion.div 
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="mt-40 pt-40 border-t border-gray-100 text-center space-y-16"
+        >
+            <div className="relative inline-block">
+                <h3 className="text-[36px] md:text-[60px] font-[900] text-[#004A87] italic tracking-tighter">
+                   "El Paraíso en Tu Hogar"
+                </h3>
+                <div className="absolute -bottom-4 left-0 w-full h-[6px] bg-[#004A87]/10" />
+            </div>
+            
+            <div className="flex flex-col md:flex-row gap-6 justify-center pt-8">
+                <button className="px-14 py-6 bg-black text-white text-[13px] font-[900] uppercase tracking-[0.4em] hover:bg-[#004A87] transition-all duration-500 rounded-none">
+                    Nuestra Historia
+                </button>
+                <button className="px-14 py-6 bg-white border-2 border-black text-black text-[13px] font-[900] uppercase tracking-[0.4em] hover:bg-black hover:text-white transition-all duration-500 rounded-none">
+                    Contactar Experto
+                </button>
+            </div>
+        </motion.div>
 
       </div>
     </section>
