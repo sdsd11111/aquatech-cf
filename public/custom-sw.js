@@ -1,7 +1,7 @@
 // ============================================================
 // Aquatech CRM — Custom Service Worker (Offline-First) v14
 // ============================================================
-const CACHE_VERSION = 'v25';
+const CACHE_VERSION = 'v27';
 const STATIC_CACHE = `aquatech-static-${CACHE_VERSION}`;
 const PAGES_CACHE  = `aquatech-pages-${CACHE_VERSION}`;
 const ASSETS_CACHE = `aquatech-assets-${CACHE_VERSION}`;

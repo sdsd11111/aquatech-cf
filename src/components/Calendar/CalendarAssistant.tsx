@@ -19,11 +19,23 @@ export default function CalendarAssistant() {
   const [isLoading, setIsLoading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingDuration, setRecordingDuration] = useState(0)
+  const [volume, setVolume] = useState(0)
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const analyzerRef = useRef<AnalyserNode | null>(null)
+  const animFrameRef = useRef<number | null>(null)
+
+  // Pre-autorizar mic al abrir la ventana para evitar lag
+  useEffect(() => {
+    if (isOpen && typeof window !== 'undefined') {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => stream.getTracks().forEach(t => t.stop())) // Activar permiso
+        .catch(console.warn)
+    }
+  }, [isOpen])
 
   // Auto-scroll chat
   useEffect(() => {
@@ -96,13 +108,33 @@ export default function CalendarAssistant() {
   const startRecording = async () => {
     try {
       if (typeof window !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate(50) // Feedback táctil
+        navigator.vibrate(50)
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       
+      // Setup Visualizador
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyzer = audioCtx.createAnalyser()
+      analyzer.fftSize = 256
+      source.connect(analyzer)
+      analyzerRef.current = analyzer
+
+      const dataArray = new Uint8Array(analyzer.frequencyBinCount)
+      const updateVolume = () => {
+        if (!analyzerRef.current) return
+        analyzerRef.current.getByteFrequencyData(dataArray)
+        let sum = 0
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
+        const avg = sum / dataArray.length
+        setVolume(avg)
+        animFrameRef.current = requestAnimationFrame(updateVolume)
+      }
+      updateVolume()
+
       const getValidMimeType = () => {
-        const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/aac', 'audio/mp4'];
+        const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/aac', 'audio/mp4'];
         for (const t of types) {
           if (MediaRecorder.isTypeSupported(t)) return t;
         }
@@ -116,63 +148,53 @@ export default function CalendarAssistant() {
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) {
           chunks.push(e.data)
-          setCapturedSize(prev => prev + Math.round(e.data.size / 1024))
         }
       }
 
       recorder.onstop = async () => {
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+        audioCtx.close()
+        
         const audioBlob = new Blob(chunks, { type: mime || 'audio/webm' })
         setCapturedSize(Math.round(audioBlob.size / 1024))
 
-        if (audioBlob.size < 500) { // Menos de medio KB es vacío
-           console.warn(`Audio descartado por tamaño: ${audioBlob.size} bytes`);
+        if (audioBlob.size < 100) { // Menos de 100 bytes es definitivamente ruido/error
            setMessages(prev => [...prev, { 
              role: 'assistant', 
-             content: `El audio fue muy corto o vacío (${audioBlob.size} bytes). Asegúrate de que el micrófono esté limpio y habla fuerte.` 
+             content: `Audio demasiado corto. Intenta hablar nuevamente.` 
            }])
            stream.getTracks().forEach(track => track.stop())
            return
         }
 
-        const ext = mime.includes('mp4') ? 'm4a' : 'webm'
-        console.log(`Grabación finalizada: ${audioBlob.size} bytes, typo: ${mime}`);
-        await handleTranscription(audioBlob, ext)
+        await handleTranscription(audioBlob, 'webm')
         stream.getTracks().forEach(track => track.stop())
       }
 
       audioChunksRef.current = chunks
       mediaRecorderRef.current = recorder
       
-      recorder.start(200) // Chunks frecuentes para mantener el flujo
-      setRecordingDuration(0)
+      recorder.start() // Sin intervalos, modo Proyectos (más estable)
       setIsRecording(true)
       setCapturedSize(0)
 
-      timerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1)
-      }, 1000)
-
     } catch (err) {
       console.error('Error al iniciar micrófono:', err)
-      alert('Error de micrófono: Por favor otorga permisos o verifica que otra app no lo esté usando.')
+      alert('Error de micrófono: Verifica permisos.')
     }
   }
 
-  const stopRecording = (e?: React.MouseEvent | React.TouchEvent) => {
-    if (e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-
+  const stopRecording = (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault()
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop()
       setIsRecording(false)
-      if (timerRef.current) clearInterval(timerRef.current)
+      setVolume(0)
     }
   }
 
-  const handleTranscription = async (blob: Blob, ext: string) => {
-    const audioUrl = URL.createObjectURL(blob)
+  const handleTranscription = async (audioBlob: Blob, ext: string) => {
+    const audioUrl = URL.createObjectURL(audioBlob)
     const audioMsg: Message = { 
       role: 'user', 
       content: '🎤 Audio enviado (transcribiendo...)',
@@ -183,50 +205,41 @@ export default function CalendarAssistant() {
     setIsLoading(true)
 
     try {
-      // Conversion a Base64 para garantizar integridad en Vercel
-      const reader = new FileReader()
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const base64String = (reader.result as string).split(',')[1]
-          if (!base64String) reject(new Error('Fallo al convertir audio a Base64'))
-          resolve(base64String)
-        }
-        reader.onerror = () => reject(new Error('Error leyendo el archivo de audio'))
-        reader.readAsDataURL(blob)
-      })
-
-      const base64Audio = await base64Promise
+      const formData = new FormData()
+      formData.append('file', new File([audioBlob], `audio.${ext}`, { type: audioBlob.type }))
 
       const res = await fetch('/api/media/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: base64Audio, ext })
+        body: formData
       })
 
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        console.error('API Error:', data)
         throw new Error(data.details || data.error || 'Error en transcripción')
       }
       
-      if (data.text) {
-        // Actualizar el mensaje de audio con la transcripción
-        const finalMessages = messages.map(m => 
-          m.audioUrl === audioUrl 
-            ? { ...m, content: `🎤 **Transcripción:** ${data.text}` } 
-            : m
-        )
-        setMessages(finalMessages)
+      const transcriptionText = data.text || ''
+      
+      if (transcriptionText) {
+        // Actualizar el mensaje de audio con la transcripción en la UI
+        setMessages(prev => prev.map(m => 
+          m.content.includes('transcribiendo...') ? { ...m, content: `🎤 ${transcriptionText}` } : m
+        ))
         
-        // Ejecutar handleSend con la lista de mensajes YA actualizada para evitar carrera de estados
-        const aiMessages = finalMessages.map(m => 
-          m.audioUrl === audioUrl ? { ...m, content: data.text } : m
-        )
-        await handleSend(data.text, true, aiMessages)
+        // Enviar al bot con el texto transcrito
+        // Creamos la lista de mensajes actualizada para el bot
+        const updatedMessages: Message[] = [
+          ...messages,
+          { role: 'user', content: transcriptionText }
+        ]
+        await handleSend(transcriptionText, true, updatedMessages)
+      } else {
+        throw new Error('No se pudo obtener texto del audio')
       }
-    } catch (error: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message || 'No pude entender el audio. ¿Podrías repetirlo?'}` }])
+    } catch (error) {
+      console.error('Transcription Error:', error)
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Lo siento, no pude transcribir el audio. ¿Podrías intentar escribirlo o hablar más claro?' }])
     } finally {
       setIsLoading(false)
     }
@@ -317,8 +330,11 @@ export default function CalendarAssistant() {
                         >
                            {isRecording ? (
                              <div className="recording-status">
-                               <span className="kb-indicator">{capturedSize} KB</span>
-                               <div className="recording-timer">{recordingDuration}s</div>
+                                <div className="volume-visualizer">
+                                  <div className="volume-bar" style={{ height: `${Math.min(100, volume * 2)}%` }}></div>
+                                </div>
+                                <span className="kb-indicator">{capturedSize} KB</span>
+                                <div className="recording-timer">{recordingDuration}s</div>
                              </div>
                            ) : <Mic size={20} />}
                         </button>
@@ -656,10 +672,23 @@ export default function CalendarAssistant() {
           transform-origin: bottom right;
         }
 
-        .thinking-dots {
-          display: flex;
-          gap: 4px;
-          padding: 4px 0;
+        .volume-visualizer {
+          width: 4px;
+          height: 18px;
+          background: rgba(255,255,255,0.2);
+          border-radius: 2px;
+          position: relative;
+          overflow: hidden;
+          margin-bottom: 2px;
+        }
+
+        .volume-bar {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          width: 100%;
+          background: white;
+          transition: height 0.05s ease-out;
         }
 
         .thinking-dots span {
