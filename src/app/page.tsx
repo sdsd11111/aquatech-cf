@@ -3,6 +3,7 @@ import Hero from '@/components/marketing/Hero'
 import FeaturedProduct from '@/components/marketing/FeaturedProduct'
 import CategoryGrid from '@/components/marketing/CategoryGrid'
 import Footer from '@/components/marketing/Footer'
+import ScrollArrowDivider from '@/components/marketing/ScrollArrowDivider'
 
 // metadataBase is required in Next.js 14+ to resolve relative URLs for social sharing
 export const metadata: Metadata = {
@@ -21,19 +22,25 @@ export const metadata: Metadata = {
 export default function Home() {
   return (
     <main className="min-h-screen bg-white selection:bg-[#0070C0] selection:text-white">
-      {/* Hero Section: Banner Principal (Estilo Apple) */}
+      {/* Hero Section: Banner Principal (95vh) */}
       <Hero />
 
-      {/* Featured Focus: Producto Estrella Gigante (Tipo iPhone impact) */}
+      {/* Spacing with Clickable Black Arrows */}
+      <ScrollArrowDivider />
+
+      {/* Spacing before next section */}
+      <div className="h-20 bg-white" />
+
+      {/* Featured Focus: Horizontal Banner Sin Texto */}
       <FeaturedProduct />
 
-      {/* Service Grid: 2x2 side-by-side (Tipo iMac/Watch cards) */}
+      {/* Service Grid: 2x2 side-by-side (50/50 Squares Rect Borders) */}
       <CategoryGrid />
 
-      {/* Espaciador de Seguridad para garantizar separación del footer */}
-      <div className="h-32 md:h-48 bg-white" />
+      {/* Espaciador de Seguridad */}
+      <div className="h-40 bg-white" />
 
-      {/* Footer: Rediseño Institucional Totalmente Espaciado */}
+      {/* Footer */}
       <Footer />
     </main>
   )

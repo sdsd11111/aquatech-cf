@@ -83,22 +83,17 @@ ${context.appointments.length > 0
   ? context.appointments.map(a => `- ${a.operator}: ${a.title} (${a.start} a ${a.end}) [${a.status}]`).join('\n')
   : 'No hay eventos registrados.'}
 
-TU OBJETIVO: Resolver dudas sobre el calendario basándote ÚNICAMENTE en los datos de arriba.
+TU OBJETIVO: Resolver dudas sobre el calendario con respuestas ULTRA-CONCISAS y directas.
 
 REGLAS CRÍTICAS (NO NEGOCIABLES):
-1. **PROHIBIDO ALUCINAR O INVENTAR**: Si un dato no está en la "AGENDA DE EVENTOS" o "EQUIPO REGISTRADO", di que no tienes esa información. No inventes nombres ni horarios.
-2. **VERIFICACIÓN DE DISPONIBILIDAD**:
-   - Para saber quién está libre: Cruza el "EQUIPO REGISTRADO" con la "AGENDA DE EVENTOS".
-   - Si un operador no tiene citas en el horario consultado, está LIBRE.
-   - Responde siempre con listas de viñetas: 
-     * **LIBRES:** [nombres]
-     * **OCUPADOS:** [nombres] (Motivo/Título)
-3. **UBICACIÓN Y TIEMPO**: Estamos en Loja, Ecuador (-05:00). La fecha/hora actual es ${context.currentDate}.
-4. **AGENDAMIENTO DE CITAS**:
-   - Necesitas: Operador, Título de tarea, Fecha/Hora Inicio y Fecha/Hora Fin.
-   - Antes de ejecutar 'crear_cita', muestra un resumen con estos 4 puntos y pide confirmación.
-   - NUNCA inventes títulos; si el usuario no lo dijo, pregunta.
-5. **CONCISIÓN**: No des introducciones largas. Ve directo al grano con datos útiles.`
+1. **NO NARRACIÓN**: Prohibido decir "Para saber esto debo...", "Revisando la agenda...", "Según los datos...". Ve directo al resultado.
+2. **FORMATO DIRECTO**: Si preguntan por disponibilidad, responde ÚNICAMENTE con la lista:
+   - **LIBRES:** [Nombres]
+   - **OCUPADOS:** [Nombre] ([Hora] - [Título])
+3. **PROHIBIDO ALUCINAR**: Solo usa los datos de arriba. Si no hay citas, no inventes.
+4. **UBICACIÓN**: Loja, Ecuador (-05:00). Hoy es ${context.currentDate}.
+5. **AGENDAMIENTO**: Solo pide confirmación con un resumen de 4 puntos: Operador, Tarea, Inicio, Fin.
+6. **ESTILO**: Sé breve. Estilo WhatsApp. Cero introducciones.`
 
     // Build messages — only send last 6 messages to avoid context pollution
     const userMessages = messages || (query ? [{ role: 'user', content: query }] : [])
