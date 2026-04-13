@@ -1,146 +1,229 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { MapPin, ShieldCheck, Zap, Heart, ArrowRight } from 'lucide-react'
+import { ShieldCheck, Zap, Heart, MapPin } from 'lucide-react'
 
 export default function AboutUs() {
-  const cards = [
-    {
-      title: "Presencia Regional",
-      icon: <MapPin size={24} />,
-      items: ["Matriz Loja", "Agencia Malacatos", "Boutique Vilcabamba", "Soporte Yantzaza"],
-      accent: "#004A87"
-    },
-    {
-      title: "Modelo Llave en Mano",
-      icon: <Zap size={24} />,
-      items: ["Diseño Arquitectónico", "Construcción Civil", "Montaje Técnico", "Mantenimiento"],
-      accent: "#000000"
-    },
-    {
-      title: "Ingeniería de Agua",
-      icon: <ShieldCheck size={24} />,
-      items: ["Piscinas de Lujo", "Riego Automático", "Potabilización", "Bombeo Industrial"],
-      accent: "#004A87"
-    },
-    {
-      title: "Misión Aquatech",
-      icon: <Heart size={24} />,
-      items: ["Bienestar Hogar", "Sustentabilidad", "Calidad Alemana", "Garantía Real"],
-      accent: "#000000"
-    }
-  ]
-
   return (
     <section 
       id="nosotros"
       style={{ 
-        backgroundColor: '#FAFAFB', 
-        paddingTop: '160px', 
-        paddingBottom: '160px',
-        borderTop: '1px solid #EEEEEE'
+        backgroundColor: '#FFFFFF', 
+        paddingTop: '80px', 
+        paddingBottom: '80px',
+        position: 'relative',
+        overflow: 'hidden'
       }}
     >
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
-        
-        {/* Header Section */}
-        <div style={{ marginBottom: '100px', maxWidth: '1100px', margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', marginBottom: '32px' }}>
-             <div style={{ width: '60px', height: '4px', backgroundColor: '#004A87' }} />
-             <span style={{ fontSize: '14px', fontWeight: '900', color: '#004A87', textTransform: 'uppercase', letterSpacing: '0.4em' }}>
-                Conoce Nuestra Esencia
-             </span>
-             <div style={{ width: '60px', height: '4px', backgroundColor: '#004A87' }} />
-          </div>
-          <h2 style={{ fontSize: 'clamp(44px, 6vw, 76px)', fontWeight: '900', color: 'black', lineHeight: '1.1', letterSpacing: '-0.04em', marginBottom: '40px' }}>
-            Líderes en el ciclo <br />
-            <span style={{ color: '#004A87' }}>integral del agua.</span>
-          </h2>
-          <p style={{ fontSize: '21px', color: '#666666', lineHeight: '1.7', maxWidth: '960px', margin: '40px auto 0' }}>
-            Aquatech consolida una década de trayectoria en ingeniería hidráulica, transformando hogares con soluciones de alta gama respaldadas por soporte técnico certificado.
-          </p>
-        </div>
-
-        {/* The Grid - Card-Based */}
         <div style={{ 
           display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-          gap: '32px' 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', 
+          gap: '60px',
+          alignItems: 'center'
         }}>
-          {cards.map((card, idx) => (
-            <div
-              key={idx}
+          
+          {/* Left Column: Image Collage (Square Style) */}
+          <div style={{ 
+            position: 'relative', 
+            height: '600px', 
+            width: '100%',
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            
+            {/* Image 4: Sucursal 3 (Top Right - Background) */}
+            <motion.div
+              initial={{ opacity: 0, x: 40, y: -40, rotate: 8 }}
+              whileInView={{ opacity: 1, x: 0, y: 0, rotate: 8 }}
+              viewport={{ once: true }}
+              transition={{ duration: 1 }}
               style={{
-                backgroundColor: 'white',
-                padding: '48px',
-                border: '1px solid #EEEEEE',
-                borderTop: `6px solid ${card.accent}`,
-                boxShadow: '0 20px 50px rgba(0,0,0,0.06)',
-                transition: 'all 0.4s ease'
+                position: 'absolute',
+                top: '5%',
+                right: '5%',
+                width: '45%',
+                height: '180px',
+                borderRadius: '0px', // Square
+                overflow: 'hidden',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+                zIndex: 1,
+                border: '4px solid white',
+                filter: 'brightness(0.95)',
+                backgroundColor: '#F9FAFB'
               }}
-              className="group hover:shadow-2xl translate-y-0 hover:-translate-y-2 transition-all duration-500"
             >
-              <div style={{ marginBottom: '40px', color: '#004A87' }}>
-                {card.icon}
-              </div>
+              <img src="https://cesarweb.b-cdn.net/home/showroom_interior.webp" alt="Showroom Interior" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+            </motion.div>
+
+            {/* Image 1: Matriz (Top Left) */}
+            <motion.div
+              initial={{ opacity: 0, x: -60, y: -30, rotate: -6 }}
+              whileInView={{ opacity: 1, x: 0, y: 0, rotate: -6 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              style={{
+                position: 'absolute',
+                top: '10%',
+                left: '2%',
+                width: '55%',
+                height: '240px',
+                borderRadius: '0px', // Square
+                overflow: 'hidden',
+                boxShadow: '0 25px 50px rgba(0,0,0,0.15)',
+                zIndex: 2,
+                border: '4px solid white',
+                backgroundColor: '#F3F4F6'
+              }}
+            >
+              <img src="https://cesarweb.b-cdn.net/home/matriz_frente.webp" alt="Matriz Loja" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+            </motion.div>
+
+            {/* Image 2: Sucursal 1 (Bottom Left) */}
+            <motion.div
+              initial={{ opacity: 0, x: -40, y: 60, rotate: 4 }}
+              whileInView={{ opacity: 1, x: 0, y: 0, rotate: 4 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              style={{
+                position: 'absolute',
+                bottom: '8%',
+                left: '5%',
+                width: '50%',
+                height: '200px',
+                borderRadius: '0px', // Square
+                overflow: 'hidden',
+                boxShadow: '0 20px 45px rgba(0,0,0,0.12)',
+                zIndex: 3,
+                border: '4px solid white',
+                backgroundColor: '#E5E7EB'
+              }}
+            >
+              <img src="https://cesarweb.b-cdn.net/home/equipo_trabajo.webp" alt="Equipo de Trabajo" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
+            </motion.div>
+
+            {/* Image 3: Sucursal 2 (Center Right - Foreground) */}
+            <motion.div
+              initial={{ opacity: 0, x: 70, y: 40, rotate: -4 }}
+              whileInView={{ opacity: 1, x: 0, y: 0, rotate: -4 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+              style={{
+                position: 'absolute',
+                bottom: '15%',
+                right: '2%',
+                width: '58%',
+                height: '260px',
+                borderRadius: '0px', // Square
+                overflow: 'hidden',
+                boxShadow: '0 30px 60px rgba(0,0,0,0.2)',
+                zIndex: 4,
+                border: '4px solid white',
+                backgroundColor: '#D1D5DB'
+              }}
+            >
+              <img src="https://cesarweb.b-cdn.net/home/detalle_ingenieria.webp" alt="Detalle Ingeniería" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
               
-              <h3 style={{ fontSize: '24px', fontWeight: '900', color: 'black', marginBottom: '32px', letterSpacing: '-0.02em' }}>
-                {card.title}
-              </h3>
+              {/* Review Badge (Square) */}
+              <div style={{
+                position: 'absolute',
+                bottom: '24px',
+                right: '24px',
+                backgroundColor: '#22C55E',
+                color: 'white',
+                padding: '12px 24px',
+                borderRadius: '0px', // Square
+                textAlign: 'center',
+                boxShadow: '0 10px 25px rgba(34,197,94,0.4)',
+                zIndex: 10,
+                border: '1px solid rgba(255,255,255,0.2)'
+              }}>
+                <div style={{ fontSize: '20px', fontWeight: '900', lineHeight: 1 }}>5/5</div>
+                <div style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '800', letterSpacing: '0.08em', marginTop: '4px' }}>Valoración Real</div>
+              </div>
+            </motion.div>
+          </div>
 
-              <ul style={{ padding: 0, margin: 0, listStyle: 'none' }}>
-                {card.items.map((item, i) => (
-                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '15px', color: '#444444', fontWeight: '600', marginBottom: '16px' }}>
-                    <div style={{ width: '6px', height: '6px', backgroundColor: '#004A87' }} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
+          {/* Right Column: Text Content */}
+          <motion.div
+            initial={{ opacity: 0, x: 40 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+               <div style={{ width: '32px', height: '2px', backgroundColor: '#004A87' }} />
+               <span className="font-brand" style={{ fontSize: '12px', fontWeight: '900', color: '#004A87', textTransform: 'uppercase', letterSpacing: '0.4em' }}>
+                  Nuestra Trayectoria
+               </span>
             </div>
-          ))}
-        </div>
+            
+            <h2 className="font-brand" style={{ 
+              fontSize: 'clamp(32px, 4vw, 56px)', 
+              fontWeight: '900', 
+              color: '#0B1623', 
+              lineHeight: '1.1', 
+              letterSpacing: '-0.03em', 
+              marginBottom: '32px' 
+            }}>
+              Líderes en el ciclo <br />
+              <span style={{ color: '#004A87' }}>integral del agua.</span>
+            </h2>
+            
+            <p style={{ 
+              fontSize: '18px', 
+              color: '#4B5563', 
+              lineHeight: '1.7', 
+              marginBottom: '40px',
+              maxWidth: '540px'
+            }}>
+              Con más de una década de experiencia, en Aquatech hemos perfeccionado el arte de llevar el paraíso a tu hogar. Nuestra infraestructura robusta con matriz y sucursales estratégicas nos permite ofrecer un respaldo único en el país.
+            </p>
 
-        {/* Footer of the section */}
-        <div style={{ marginTop: '120px', textAlign: 'center' }}>
-           <h3 style={{ fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: '900', fontStyle: 'italic', color: '#004A87', marginBottom: '60px', letterSpacing: '-0.02em' }}>
-              "El Paraíso en Tu Hogar"
-           </h3>
-           <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '48px' }}>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ color: '#004A87' }}><ShieldCheck size={24} /></div>
+                <div>
+                  <h4 style={{ fontWeight: '800', color: '#111827', fontSize: '15px' }}>Garantía Real</h4>
+                  <p style={{ fontSize: '13px', color: '#6B7280' }}>Soporte técnico directo sin intermediarios.</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <div style={{ color: '#004A87' }}><Zap size={24} /></div>
+                <div>
+                  <h4 style={{ fontWeight: '800', color: '#111827', fontSize: '15px' }}>Eficiencia Alemana</h4>
+                  <p style={{ fontSize: '13px', color: '#6B7280' }}>Equipos de alta gama con máxima durabilidad.</p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
               <button 
                 style={{
-                  backgroundColor: 'black',
+                  backgroundColor: '#000000',
                   color: 'white',
-                  padding: '24px 50px',
-                  fontSize: '12px',
+                  padding: '18px 36px',
+                  borderRadius: '0px', // Square
+                  fontSize: '13px',
                   fontWeight: '900',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.4em',
+                  letterSpacing: '0.1em',
                   border: 'none',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
                 }}
-                className="hover:bg-[#004A87] transition-all"
+                className="hover:scale-105 hover:bg-[#004A87] shadow-lg"
               >
-                Nuestra Historia
+                Conocer Historia
               </button>
-              <button 
-                style={{
-                  backgroundColor: 'white',
-                  color: 'black',
-                  padding: '24px 50px',
-                  fontSize: '12px',
-                  fontWeight: '900',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.4em',
-                  border: '2px solid black',
-                  cursor: 'pointer'
-                }}
-                className="hover:bg-black hover:text-white transition-all"
-              >
-                Contactar Experto
-              </button>
-           </div>
-        </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#004A87', fontWeight: '800', fontSize: '14px', cursor: 'pointer' }}>
+                Ver ubicaciones <MapPin size={18} />
+              </div>
+            </div>
+          </motion.div>
 
+        </div>
       </div>
     </section>
   )

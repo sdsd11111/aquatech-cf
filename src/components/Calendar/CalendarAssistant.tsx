@@ -347,10 +347,17 @@ export default function CalendarAssistant() {
       <style jsx>{`
         .calendar-ai-assistant {
           position: fixed;
-          bottom: 20px;
-          right: 20px;
+          bottom: 25px;
+          right: 25px;
           z-index: 1000;
           font-family: inherit;
+        }
+
+        @media (max-width: 768px) {
+          .calendar-ai-assistant {
+            bottom: calc(var(--mobile-nav-height, 64px) + 20px);
+            right: 15px;
+          }
         }
 
         /* Bubble Button */
@@ -369,6 +376,13 @@ export default function CalendarAssistant() {
           transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
+        @media (max-width: 768px) {
+          .ai-bubble-btn {
+            width: 55px;
+            height: 55px;
+          }
+        }
+
         .ai-bubble-btn:hover {
           transform: scale(1.1) rotate(5deg);
         }
@@ -381,19 +395,25 @@ export default function CalendarAssistant() {
         .bubble-label {
           position: absolute;
           right: 120%;
-          background: var(--card-bg, #ffffff);
+          background: var(--bg-card, #132238);
           padding: 8px 16px;
           border-radius: 12px;
           box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-          color: var(--text-color, #1e293b);
+          color: var(--text, #ffffff);
           font-weight: 600;
           font-size: 0.9rem;
           white-space: nowrap;
-          border: 1px solid var(--border-color, #e2e8f0);
+          border: 1px solid var(--border, rgba(56, 189, 248, 0.1));
           opacity: 0;
           transform: translateX(10px);
           transition: all 0.3s;
           pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+          .bubble-label {
+            display: none; /* Ocultar etiqueta en móvil */
+          }
         }
 
         .ai-bubble-btn:hover .bubble-label {
@@ -404,14 +424,15 @@ export default function CalendarAssistant() {
         /* Chat Window */
         .chat-window {
           width: 380px;
-          maxWidth: calc(100vw - 40px);
+          max-width: calc(100vw - 30px);
           height: 550px;
-          background: rgba(255, 255, 255, 0.85);
+          max-height: calc(100vh - 120px);
+          background: rgba(19, 34, 56, 0.9);
           backdrop-filter: blur(15px);
           -webkit-backdrop-filter: blur(15px);
-          border: 1px solid rgba(255, 255, 255, 0.3);
+          border: 1px solid rgba(56, 189, 248, 0.2);
           border-radius: 24px;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+          box-shadow: 0 20px 50px rgba(0,0,0,0.3);
           display: flex;
           flex-direction: column;
           overflow: hidden;
@@ -420,8 +441,17 @@ export default function CalendarAssistant() {
           right: 0;
         }
 
+        @media (max-width: 480px) {
+          .chat-window {
+            width: calc(100vw - 32px);
+            height: 500px;
+            bottom: 0;
+            right: 0;
+          }
+        }
+
         .chat-header {
-          padding: 18px 24px;
+          padding: 16px 20px;
           background: linear-gradient(90deg, #0891b2, #0e7490);
           color: white;
           display: flex;

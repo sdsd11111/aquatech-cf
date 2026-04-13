@@ -18,6 +18,7 @@ export default function WhatsAppButton() {
                 src="/WhatsApp.svg.png" 
                 alt="WhatsApp" 
                 fill 
+                sizes="64px"
                 className="object-contain"
             />
         </div>

@@ -1,0 +1,1115 @@
+'use client'
+
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { formatTimeEcuador, formatDateEcuador } from '@/lib/date-utils'
+import MediaCapture from '@/components/MediaCapture'
+
+// --- SVGs for WhatsApp Icons ---
+const svgProps = (size: number) => ({
+  width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
+  stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const
+})
+
+const Paperclip = ({ size = 20 }: any) => <svg {...svgProps(size)}><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.51a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+const Camera = ({ size = 20 }: any) => <svg {...svgProps(size)}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+const Mic = ({ size = 20 }: any) => <svg {...svgProps(size)}><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+const Send = ({ size = 20 }: any) => <svg {...svgProps(size)}><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+const MoreVertical = ({ size = 20 }: any) => <svg {...svgProps(size)}><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+const Smile = ({ size = 20 }: any) => <svg {...svgProps(size)}><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
+const Play = ({ size = 16 }: any) => <svg {...svgProps(size)} fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+const getSenderColor = (name: string) => {
+  const colors = [
+    '#25d366', '#34d399', '#3b82f6', '#f59e0b', '#ef4444', 
+    '#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f97316'
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return colors[Math.abs(hash) % colors.length]
+}
+
+
+interface ProjectChatUnifiedProps {
+  project: any
+  messages: any[]
+  userId: number
+  onSendMessage: (content: string, type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'EXPENSE_LOG' | 'NOTE', extraData?: any) => void
+  onDayAction?: () => void
+  activeRecord?: any
+  isOperatorView?: boolean
+  backUrl?: string
+  onBack?: () => void
+  hideBack?: boolean
+}
+
+export default function ProjectChatUnified({
+  project,
+  messages,
+  userId,
+  onSendMessage,
+  onDayAction,
+  activeRecord,
+  isOperatorView = false,
+  backUrl = '/admin/proyectos',
+  onBack,
+  hideBack = false
+}: ProjectChatUnifiedProps) {
+  const [inputValue, setInputValue] = useState('')
+  const [showAttachments, setShowAttachments] = useState(false)
+  const [showMediaCapture, setShowMediaCapture] = useState<'audio' | 'video' | null>(null)
+  const [showMenu, setShowMenu] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showFilesBrowser, setShowFilesBrowser] = useState(false)
+  const [selectedPhaseId, setSelectedPhaseId] = useState<number | null>(null)
+  const [expenseModal, setExpenseModal] = useState<{ isOpen: boolean; isNote: boolean }>({ isOpen: false, isNote: false })
+  const [expenseForm, setExpenseForm] = useState({ amount: '', description: '', file: null as File | null })
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatBodyRef = useRef<HTMLDivElement>(null)
+
+  const [autoScroll, setAutoScroll] = useState(true)
+  const [showNewMsgBtn, setShowNewMsgBtn] = useState(false)
+  const [msgCount, setMsgCount] = useState(messages.length)
+  const [filesFilter, setFilesFilter] = useState<'ALL' | 'IMAGES' | 'VIDEOS' | 'AUDIOS' | 'DOCS'>('ALL')
+  
+  const allMedia = useMemo(() => {
+    const list: any[] = []
+    messages.forEach(m => {
+      // m.media can be an array of objects {url, name, type...} or a single object
+      const parts = Array.isArray(m.media) ? m.media : (m.media ? [m.media] : [])
+      parts.forEach((p: any) => {
+        if (p?.url) {
+          let type: 'IMAGES' | 'VIDEOS' | 'AUDIOS' | 'DOCS' = 'DOCS'
+          const url = p.url.toLowerCase()
+          if (url.match(/\.(jpg|jpeg|png|gif|webp|heic|svg)$/)) type = 'IMAGES'
+          else if (url.match(/\.(mp4|mov|avi|webm|mkv)$/)) type = 'VIDEOS'
+          else if (url.match(/\.(mp3|wav|ogg|m4a|aac)$/)) type = 'AUDIOS'
+          
+          list.push({ 
+            ...p, 
+            type, 
+            timestamp: m.createdAt || m.timestamp,
+            sender: m.userName || m.senderName || 'Sistema'
+          })
+        }
+      })
+    })
+    return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  }, [messages])
+
+  const filteredMedia = useMemo(() => {
+    if (filesFilter === 'ALL') return allMedia
+    return allMedia.filter(m => m.type === filesFilter)
+  }, [allMedia, filesFilter])
+
+  // Scroll logic
+  useEffect(() => {
+    if (messages.length > msgCount) {
+      if (!autoScroll) setShowNewMsgBtn(true)
+      setMsgCount(messages.length)
+    }
+  }, [messages.length, autoScroll, msgCount])
+
+  useEffect(() => {
+    const el = chatBodyRef.current;
+    if (!el) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    const isMe = lastMessage && (Number(lastMessage.userId) === Number(userId) || lastMessage.isMe);
+    
+    if (autoScroll || isMe) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      if (isMe) {
+        setAutoScroll(true);
+        setShowNewMsgBtn(false);
+      }
+    }
+  }, [messages]);
+
+
+
+  const handleSend = () => {
+    if (!inputValue.trim()) return
+    onSendMessage(inputValue, 'TEXT', { phaseId: selectedPhaseId })
+    setInputValue('')
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handleFinalizePhase = async () => {
+    if (!selectedPhaseId) return;
+    const phase = project.phases.find((p: any) => p.id === selectedPhaseId);
+    if (!phase) return;
+
+    if (!confirm(`¿Estás seguro de que deseas finalizar la fase "${phase.title}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}/phases/${selectedPhaseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'COMPLETED' })
+      });
+      if (res.ok) {
+        alert("Fase finalizada con éxito.");
+        window.location.reload(); // Refresh to show updated status
+      }
+    } catch (err) {
+      console.error("Error finalizing phase:", err);
+    }
+  }
+
+  const handleSendWithPhase = (content: string, type: any, extra?: any) => {
+    onSendMessage(content, type, { ...extra, phaseId: selectedPhaseId });
+  }
+
+  const toggleDayRecord = () => {
+    if (onDayAction) onDayAction()
+  }
+
+  // --- Render Attachment Menu Item ---
+  const AttachmentItem = ({ icon, label, color, onClick }: any) => (
+    <div 
+      onClick={() => { onClick(); setShowAttachments(false); }}
+      style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        gap: '8px', 
+        cursor: 'pointer',
+        width: '75px'
+      }}
+    >
+      <div style={{ 
+        width: '52px', 
+        height: '52px', 
+        borderRadius: '50%', 
+        backgroundColor: color, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        color: 'white',
+        boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+        transition: 'transform 0.1s'
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+      >
+        {icon}
+      </div>
+      <span style={{ fontSize: '0.7rem', color: '#e9edef', fontWeight: '500', textAlign: 'center' }}>{label}</span>
+    </div>
+  )
+
+  const handleExpenseAction = (isNote: boolean) => {
+    setShowAttachments(false); 
+    setExpenseModal({ isOpen: true, isNote });
+    setExpenseForm({ amount: '', description: '', file: null });
+  }
+
+  const submitExpenseForm = () => {
+    if (!expenseForm.amount || !expenseForm.description) {
+      alert("Monto y descripción son obligatorios.");
+      return;
+    }
+    setExpenseModal({ isOpen: false, isNote: false });
+    handleSendWithPhase(expenseForm.description, 'EXPENSE_LOG', { 
+      amount: Number(expenseForm.amount), 
+      isNote: expenseModal.isNote,
+      file: expenseForm.file 
+    });
+  }
+
+  const handleNoteAction = () => {
+    const content = prompt("Escriba su nota técnica:");
+    if (content) handleSendWithPhase(content, 'NOTE');
+  }
+
+  const filteredMessages = messages.filter(msg => {
+    const searchMatch = !searchQuery || (msg.content && msg.content.toLowerCase().includes(searchQuery.toLowerCase()));
+    const phaseMatch = selectedPhaseId === null || Number(msg.phaseId) === selectedPhaseId;
+    return searchMatch && phaseMatch;
+  });
+
+
+  return (
+    <div className="whatsapp-chat-container">
+      {/* --- HEADER --- */}
+      <header className="chat-header">
+        <div className="header-left">
+          {!hideBack && (
+            <button 
+              onClick={(e) => {
+                if (onBack) {
+                  e.preventDefault();
+                  onBack();
+                }
+              }}
+              style={{ background: 'none', border: 'none', cursor: onBack ? 'pointer' : 'default', padding: 0 }}
+            >
+              <a 
+                href={onBack ? '#' : backUrl} 
+                className="btn-icon header-back"
+                onClick={(e) => {
+                  if (onBack) e.preventDefault();
+                }}
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+              </a>
+            </button>
+          )}
+           <div className="project-avatar">
+              {project.title.substring(0, 2).toUpperCase()}
+           </div>
+           <div className="project-info">
+             <h1>{project.title}</h1>
+             <p style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span style={{ whiteSpace: 'nowrap' }}>{activeRecord ? '🟢 Jornada Activa' : '⚪ Jornada cerrada'}</span>
+                
+                <select 
+                  value={selectedPhaseId || ''} 
+                  onChange={(e) => setSelectedPhaseId(e.target.value ? Number(e.target.value) : null)}
+                  style={{ 
+                    background: 'rgba(255,255,255,0.1)', 
+                    border: '1px solid rgba(255,255,255,0.2)', 
+                    color: 'white', 
+                    fontSize: '0.7rem', 
+                    borderRadius: '6px',
+                    padding: '2px 6px',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    maxWidth: '120px'
+                  }}
+                >
+                  <option value="" style={{ color: 'black' }}>General (Toda la obra)</option>
+                  {project.phases?.map((p: any) => (
+                    <option key={p.id} value={p.id} style={{ color: 'black' }}>
+                      {p.title} {p.status === 'COMPLETED' ? '✅' : ''}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedPhaseId && project.phases?.find((p:any) => p.id === Number(selectedPhaseId))?.status !== 'COMPLETED' && (
+                  <button 
+                    onClick={handleFinalizePhase}
+                    style={{ background: '#10b981', color: 'white', border: 'none', padding: '3px 8px', borderRadius: '10px', fontSize: '0.6rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    Finalizar Fase
+                  </button>
+                )}
+             </p>
+           </div>
+
+        </div>
+        <div className="header-actions">
+           {showSearch ? (
+             <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-deep)', borderRadius: '20px', padding: '4px 12px', marginRight: '8px' }}>
+               <input 
+                 type="text" 
+                 placeholder="Buscar..." 
+                 value={searchQuery}
+                 onChange={e => setSearchQuery(e.target.value)}
+                 style={{ background: 'none', border: 'none', color: 'var(--text)', outline: 'none', width: '120px', fontSize: '0.9rem' }}
+                 autoFocus
+               />
+               <button onClick={() => { setShowSearch(false); setSearchQuery(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0' }}>✕</button>
+             </div>
+           ) : (
+             <>
+               {isOperatorView && (
+                 <button 
+                    onClick={toggleDayRecord}
+                    className={`btn-jornada ${activeRecord ? 'active' : ''}`}
+                 >
+                   {activeRecord ? 'Cerrar Jornada' : 'Iniciar Jornada'}
+                 </button>
+               )}
+               <button onClick={() => setShowMenu(!showMenu)} className="btn-icon">
+                 <MoreVertical />
+               </button>
+             </>
+           )}
+           
+           {showMenu && (
+             <div className="dropdown-menu">
+               <div className="menu-item" onClick={() => { setShowSearch(true); setShowMenu(false); }}>🔍 Buscar</div>
+               <div className="menu-item" onClick={() => { setShowFilesBrowser(true); setShowMenu(false); }}>📁 Archivos y docs</div>
+             </div>
+           )}
+        </div>
+      </header>
+
+      {/* --- MESSAGE LIST --- */}
+      <div 
+        ref={chatBodyRef} 
+        className="chat-body" 
+        onClick={() => { setShowAttachments(false); setShowMenu(false); }}
+        onScroll={() => {
+          const el = chatBodyRef.current
+          if (!el) return
+          const isAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 220
+          if (!isAtBottom) {
+             if (autoScroll) setAutoScroll(false)
+          } else {
+             if (!autoScroll) setAutoScroll(true)
+             setShowNewMsgBtn(false)
+          }
+        }}
+      >
+        <div className="date-badge">HOY</div>
+        {filteredMessages.map((msg, idx, filteredArray) => {
+          const isMe = Number(msg.userId) === Number(userId) || msg.isMe;
+          const showPointer = idx === 0 || filteredArray[idx-1]?.userId !== msg.userId;
+
+          // Robust media detection
+          const mediaArray = Array.isArray(msg.media) ? msg.media : (msg.media ? [msg.media] : []);
+          const mediaObj = mediaArray[0];
+          const mime = mediaObj?.mimeType || '';
+
+          return (
+            <div key={msg.id || idx} className={`message-row ${isMe ? 'me' : 'them'}`}>
+               {!isMe && showPointer && <div className="user-name" style={{ color: getSenderColor(msg.userName) }}>{msg.userName}</div>}
+               <div className={`message-bubble ${showPointer ? 'has-pointer' : ''}`}>
+                 {msg.phaseId && selectedPhaseId === null && (
+                   <div style={{ fontSize: '0.6rem', color: 'var(--primary)', marginBottom: '4px', fontWeight: 'bold' }}>
+                      ⚡ {project.phases?.find((p:any) => p.id === Number(msg.phaseId))?.title}
+                   </div>
+                 )}
+                 
+                 {/* Text Content */}
+                 {msg.content && (msg.type === 'TEXT' || msg.type === 'MESSAGE' || !msg.type) && <p>{msg.content}</p>}
+                 
+                 {/* Media Rendering */}
+                 {mediaArray.length > 0 && mediaArray.map((m: any, mIdx: number) => (
+                   <div key={m.id || mIdx} className="media-attachment-container">
+                     {(m.mimeType?.startsWith('image/') || m.type === 'IMAGE' || (!m.mimeType && m.url?.match(/\.(jpg|jpeg|png|gif|webp)$/i))) && (
+                       <div className="media-preview">
+                         <img src={m.url} alt="Media" onClick={() => window.open(m.url, '_blank')} />
+                       </div>
+                     )}
+                     
+                     {(m.mimeType?.startsWith('video/') || m.type === 'VIDEO' || (!m.mimeType && m.url?.match(/\.(mp4|mov|webm)$/i))) && (
+                       <div className="media-preview video">
+                         <video src={m.url} controls preload="metadata" />
+                       </div>
+                     )}
+                     
+                     {(m.mimeType?.startsWith('audio/') || m.type === 'AUDIO') && (
+                       <div className="audio-bubble">
+                         <audio src={m.url} controls style={{ height: '32px', width: '220px' }} />
+                       </div>
+                     )}
+
+                     {(m.type === 'FILE' || m.type === 'DOCUMENT' || (!m.mimeType && m.url?.match(/\.(pdf|doc|docx|xls|xlsx|zip)$/i))) && !m.mimeType?.startsWith('image/') && !m.mimeType?.startsWith('video/') && (
+                       <div className="document-box" onClick={() => window.open(m.url, '_blank')}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                          <div className="doc-info">
+                            <span className="doc-name">{m.filename || 'Archivo'}</span>
+                            <span className="doc-type">Documento</span>
+                          </div>
+                       </div>
+                     )}
+                   </div>
+                 ))}
+                 
+                 {msg.type === 'NOTE' && (
+                    <div className="note-box" style={{ borderLeft: '4px solid #f59e0b', padding: '8px', backgroundColor: 'rgba(245, 158, 11, 0.05)', borderRadius: '4px' }}>
+                       <div style={{ color: '#f59e0b', fontSize: '0.7rem', fontWeight: 'bold', marginBottom: '4px' }}>📝 NOTA TÉCNICA</div>
+                       <p style={{ margin: 0 }}>{msg.content}</p>
+                    </div>
+                  )}
+
+                 {(msg.type === 'EXPENSE_LOG' || msg.type === 'EXPENSE') && (
+                   <div className="expense-box" style={{ 
+                     backgroundColor: (msg.extraData?.isNote || msg.isNote) ? 'rgba(59, 130, 246, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                     borderLeft: `4px solid ${(msg.extraData?.isNote || msg.isNote) ? '#3b82f6' : '#10b981'}`,
+                     padding: '8px',
+                     borderRadius: '4px',
+                     marginTop: '4px'
+                   }}>
+                     <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: (msg.extraData?.isNote || msg.isNote) ? '#3b82f6' : '#10b981' }}>
+                       {(msg.extraData?.isNote || msg.isNote) ? '🏷️ NOTA DE GASTO' : '💰 GASTO REAL'}
+                     </div>
+                     <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>$ {msg.extraData?.amount || msg.amount || '0.00'}</div>
+                     <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{msg.content}</div>
+                     {mediaObj && (
+                        <div style={{ marginTop: '5px', borderRadius: '4px', overflow: 'hidden', cursor: 'pointer' }} onClick={() => window.open(mediaObj.url, '_blank')}>
+                           <img src={mediaObj.url} style={{ width: '100%', maxHeight: '60px', objectFit: 'cover' }} alt="Recibo" />
+                        </div>
+                     )}
+                   </div>
+                 )}
+                 <div className="message-footer">
+                   <span className="time">{formatTimeEcuador(msg.createdAt)}</span>
+                   {isMe && <span className="check">✓✓</span>}
+                 </div>
+               </div>
+            </div>
+          )
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {showNewMsgBtn && (
+        <button 
+          onClick={() => { chatBodyRef.current?.scrollTo({ top: chatBodyRef.current.scrollHeight, behavior: 'smooth' }); setAutoScroll(true); setShowNewMsgBtn(false); }}
+          className="new-messages-btn"
+        >
+          ⬇️ Mensajes nuevos
+        </button>
+      )}
+
+      {/* --- ATTACHMENT MENU --- */}
+      {showAttachments && (
+        <div className="attachments-menu">
+          <div className="attachments-grid">
+            <AttachmentItem 
+              icon={<Camera size={24} />} 
+              label="Cámara" 
+              color="#d3396d" 
+              onClick={() => setShowMediaCapture('video')} 
+            />
+            <AttachmentItem 
+              icon={<Camera size={24} />} 
+              label="Galería" 
+              color="#bf59cf" 
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*,video/*';
+                input.onchange = (e: any) => {
+                  const file = e.target.files?.[0];
+                  if (file) onSendMessage('', 'FILE', { file });
+                };
+                input.click();
+              }} 
+            />
+            <AttachmentItem 
+              icon={<Paperclip size={24} />} 
+              label="Documento" 
+              color="#5157ae" 
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.pdf,.doc,.docx,.xls,.xlsx';
+                input.onchange = (e: any) => {
+                  const file = e.target.files?.[0];
+                  if (file) onSendMessage('', 'FILE', { file });
+                };
+                input.click();
+              }} 
+            />
+            <AttachmentItem 
+              icon={<Mic size={24} />} 
+              label="Audio" 
+              color="#e77e3c" 
+              onClick={() => setShowMediaCapture('audio')} 
+            />
+            <AttachmentItem 
+              icon={<span style={{ fontSize: '1.5rem' }}>💰</span>} 
+              label="Gastos" 
+              color="#00a884" 
+              onClick={() => handleExpenseAction(false)} 
+            />
+            <AttachmentItem 
+              icon={<span style={{ fontSize: '1.5rem' }}>📝</span>} 
+              label="NOTAS" 
+              color="#1fa855" 
+              onClick={handleNoteAction} 
+            />
+            <AttachmentItem 
+              icon={<span style={{ fontSize: '1.5rem' }}>🏷️</span>} 
+              label="Nota Gasto" 
+              color="#007bfc" 
+              onClick={() => handleExpenseAction(true)} 
+            />
+          </div>
+        </div>
+      )}
+
+      {showFilesBrowser && (
+        <div className="media-modal-overlay" onClick={() => setShowFilesBrowser(false)}>
+           <div className="media-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px', maxHeight: '85vh', overflowY: 'hidden', display: 'flex', flexDirection: 'column', padding: '0', borderRadius: '16px' }}>
+              
+              {/* Header */}
+              <div style={{ padding: '20px 20px 10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <h2 style={{ fontSize: '1.2rem', margin: 0 }}>Archivos, enlaces y docs</h2>
+                <button onClick={() => setShowFilesBrowser(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', cursor: 'pointer', fontSize: '0.9rem', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              </div>
+
+              {/* Filters */}
+              <div style={{ padding: '10px 20px', display: 'flex', gap: '8px', overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid rgba(255,255,255,0.05)' }} className="hide-scrollbar">
+                {[
+                  { id: 'ALL', label: 'Todo' },
+                  { id: 'IMAGES', label: 'Fotos' },
+                  { id: 'VIDEOS', label: 'Videos' },
+                  { id: 'AUDIOS', label: 'Audio' },
+                  { id: 'DOCS', label: 'Docs' }
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFilesFilter(f.id as any)}
+                    style={{ 
+                      padding: '6px 16px', 
+                      borderRadius: '20px', 
+                      border: 'none', 
+                      background: filesFilter === f.id ? 'var(--primary)' : 'rgba(255,255,255,0.08)',
+                      color: filesFilter === f.id ? 'white' : 'var(--text-muted)',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Grid */}
+              <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
+                  {filteredMedia.map((media, i) => (
+                    <div 
+                      key={i} 
+                      onClick={() => window.open(media.url, '_blank')}
+                      style={{ 
+                        aspectRatio: '1/1', 
+                        backgroundColor: 'rgba(255,255,255,0.03)', 
+                        borderRadius: '12px', 
+                        overflow: 'hidden', 
+                        cursor: 'pointer',
+                        position: 'relative',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        transition: 'transform 0.2s ease'
+                      }}
+                      className="media-item-hover"
+                    >
+                      {media.type === 'IMAGES' ? (
+                        <img 
+                          src={media.url} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          alt="Media"
+                        />
+                      ) : media.type === 'VIDEOS' ? (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
+                           <Play size={32} />
+                           <video src={media.url} style={{ display: 'none' }} />
+                        </div>
+                      ) : media.type === 'AUDIOS' ? (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                           <span style={{ fontSize: '2rem' }}>🎵</span>
+                           <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>Audio</span>
+                        </div>
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', textAlign: 'center' }}>
+                           <span style={{ fontSize: '2rem' }}>📄</span>
+                           <span style={{ fontSize: '0.65rem', opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                             {media.name || 'Documento'}
+                           </span>
+                        </div>
+                      )}
+                      
+                      {/* Overlay info */}
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '6px', background: 'linear-gradient(transparent, rgba(0,0,0,0.8))', fontSize: '0.65rem' }}>
+                         <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{media.sender}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {filteredMedia.length === 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', opacity: 0.5 }}>
+                    <span style={{ fontSize: '3rem', marginBottom: '10px' }}>📂</span>
+                    <p style={{ margin: 0 }}>No hay {filesFilter === 'ALL' ? 'archivos' : filesFilter.toLowerCase()} compartidos aún.</p>
+                  </div>
+                )}
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* --- MEDIA CAPTURE MODAL --- */}
+      {showMediaCapture && (
+        <div className="media-modal-overlay">
+           <div className="media-modal-content">
+              <button 
+                className="close-btn" 
+                onClick={() => setShowMediaCapture(null)}
+              >✕</button>
+              <MediaCapture 
+                mode={showMediaCapture}
+                onCapture={(blob, type, transcription) => {
+                  console.log('Captured:', type, transcription);
+                  alert(`Capturado ${type}: ${transcription}`);
+                  setShowMediaCapture(null);
+                }}
+              />
+           </div>
+        </div>
+      )}
+
+      {/* --- INPUT BAR --- */}
+      <footer className="chat-footer">
+        <div className="input-row">
+           <button className="btn-icon"><Smile /></button>
+           <div className="input-container">
+             <textarea 
+               placeholder="Escribir un mensaje"
+               value={inputValue}
+               onChange={(e) => setInputValue(e.target.value)}
+               onKeyPress={handleKeyPress}
+               rows={1}
+             />
+             <button onClick={() => setShowAttachments(!showAttachments)} className="btn-icon">
+                <Paperclip />
+             </button>
+             <button onClick={() => setShowMediaCapture('video')} className="btn-icon">
+                <Camera />
+             </button>
+           </div>
+           
+           <button 
+            className={`btn-send ${inputValue.trim() ? 'active' : ''}`}
+            onClick={inputValue.trim() ? handleSend : () => setShowMediaCapture('audio')}
+           >
+             {inputValue.trim() ? <Send /> : <Mic />}
+           </button>
+        </div>
+      </footer>
+
+      {/* --- EXPENSE MODAL --- */}
+      {expenseModal.isOpen && (
+        <div className="media-modal-overlay" onClick={() => setExpenseModal({ isOpen: false, isNote: false })}>
+          <div className="media-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="close-btn" onClick={() => setExpenseModal({ isOpen: false, isNote: false })}>✕</button>
+            <h3 style={{ marginTop: 0, color: expenseModal.isNote ? '#3b82f6' : '#10b981' }}>
+              {expenseModal.isNote ? '🏷️ Registrar Nota de Gasto' : '💰 Registrar Gasto Real'}
+            </h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Monto ($) *</label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  value={expenseForm.amount}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-deep)', color: 'white' }}
+                  placeholder="Ej. 15.50"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Descripción *</label>
+                <textarea 
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-deep)', color: 'white', minHeight: '80px', resize: 'vertical' }}
+                  placeholder="Detalle del gasto..."
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Factura o Recibo (Opcional)</label>
+                <input 
+                  type="file" 
+                  accept="image/*,.pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setExpenseForm({ ...expenseForm, file });
+                  }}
+                  style={{ width: '100%', color: 'var(--text-muted)' }}
+                />
+              </div>
+              
+              <button 
+                onClick={submitExpenseForm}
+                style={{
+                  background: expenseModal.isNote ? '#3b82f6' : '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  marginTop: '10px'
+                }}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .whatsapp-chat-container {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          max-height: 100%;
+          background-color: #0b141a; /* Dark WA color */
+          background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+          background-size: 400px;
+          position: relative;
+          color: #e9edef;
+        }
+
+        .whatsapp-chat-container {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          width: 100%;
+          background-color: #0b141a;
+          position: relative;
+          overflow: hidden;
+        }
+
+        /* --- HEADER --- */
+        .chat-header {
+          flex-shrink: 0;
+          background-color: #202c33;
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+          z-index: 100;
+        }
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .header-back {
+          margin-right: -4px;
+          color: #8696a0;
+        }
+        .project-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background-color: var(--primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 1rem;
+        }
+        .project-info h1 {
+          font-size: 1rem;
+          font-weight: 500;
+          margin: 0;
+        }
+        .project-info p {
+          font-size: 0.75rem;
+          color: #8696a0;
+          margin: 0;
+        }
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          position: relative;
+        }
+        .btn-jornada {
+          background-color: var(--primary);
+          color: white;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 20px;
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .btn-jornada.active {
+          background-color: var(--danger);
+        }
+
+        /* --- BODY --- */
+        .chat-body {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          padding: 20px 5% 100px 5%;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .date-badge {
+          align-self: center;
+          background-color: #202c33;
+          padding: 4px 12px;
+          border-radius: 8px;
+          font-size: 0.75rem;
+          color: #8696a0;
+          margin-bottom: 20px;
+        }
+        .message-row {
+          display: flex;
+          flex-direction: column;
+          max-width: 85%;
+          margin-bottom: 2px;
+        }
+        .message-row.me {
+          align-self: flex-end;
+          align-items: flex-end;
+        }
+        .message-row.them {
+          align-self: flex-start;
+          align-items: flex-start;
+        }
+        .user-name {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: #34d399;
+          margin-bottom: 2px;
+          margin-left: 8px;
+        }
+        .message-bubble {
+          padding: 6px 10px 8px 10px;
+          border-radius: 12px;
+          position: relative;
+          min-width: 60px;
+          box-shadow: 0 1px 1px rgba(0,0,0,0.2);
+        }
+        .me .message-bubble {
+          background-color: #005c4b; /* WA Me Color */
+          border-top-right-radius: 4px;
+        }
+        .them .message-bubble {
+          background-color: #202c33; /* WA Them Color */
+          border-top-left-radius: 4px;
+        }
+
+        .message-bubble p {
+          margin: 0;
+          font-size: 0.95rem;
+          line-height: 1.4;
+          white-space: pre-wrap;
+        }
+
+        .message-footer {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 4px;
+          margin-top: 2px;
+          height: 15px;
+        }
+        .time {
+          font-size: 0.65rem;
+          color: #8696a0;
+        }
+        .check {
+          font-size: 0.75rem;
+          color: #53bdeb;
+        }
+
+        .document-box {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: rgba(0,0,0,0.2);
+          padding: 10px;
+          border-radius: 8px;
+          cursor: pointer;
+          margin-bottom: 5px;
+          border: 1px solid rgba(255,255,255,0.05);
+        }
+        .document-box:hover {
+          background: rgba(0,0,0,0.3);
+        }
+        .doc-info {
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .doc-name {
+          font-size: 0.85rem;
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .doc-type {
+          font-size: 0.65rem;
+          opacity: 0.6;
+          text-transform: uppercase;
+        }
+
+        .note-box {
+          background: rgba(245, 158, 11, 0.05);
+          border-left: 3px solid #f59e0b;
+          padding: 8px;
+          border-radius: 4px;
+          margin-bottom: 5px;
+        }
+
+        .media-preview {
+          margin: 4px -6px;
+          border-radius: 8px;
+          overflow: hidden;
+          background-color: #111b21;
+          display: flex;
+          justify-content: center;
+        }
+        .media-preview img, .media-preview video {
+          max-width: 100%;
+          max-height: 400px;
+          object-fit: contain;
+          cursor: pointer;
+        }
+        .audio-bubble {
+          padding: 5px 0;
+          display: flex;
+          align-items: center;
+        }
+
+        /* --- ATTACHMENTS --- */
+        .attachments-menu {
+          position: absolute;
+          bottom: 70px;
+          left: 10px;
+          right: 10px;
+          background-color: #233138;
+          border-radius: 16px;
+          padding: 20px;
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+          animation: slideUp 0.3s ease;
+          z-index: 90;
+        }
+        .attachments-grid {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: space-around;
+          gap: 20px;
+        }
+
+        /* --- FOOTER --- */
+        .chat-footer {
+          flex-shrink: 0;
+          padding: 8px 10px;
+          padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+          background-color: transparent;
+          z-index: 100;
+        }
+        .input-row {
+          display: flex;
+          align-items: flex-end;
+          gap: 8px;
+        }
+        .input-container {
+          flex: 1;
+          background-color: #202c33;
+          border-radius: 28px;
+          display: flex;
+          align-items: center;
+          padding: 8px 16px;
+          min-height: 54px;
+        }
+        .input-container textarea {
+          flex: 1;
+          background: none;
+          border: none;
+          color: white;
+          resize: none;
+          padding: 12px 5px;
+          font-size: 1.05rem;
+          outline: none;
+          max-height: 150px;
+        }
+        .btn-send {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background-color: #00a884;
+          color: white;
+          border: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+
+        .btn-icon {
+          background: none;
+          border: none;
+          color: #8696a0;
+          padding: 8px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        /* --- MODALS --- */
+        .media-modal-overlay {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.9);
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .new-messages-btn {
+          position: absolute;
+          bottom: 80px;
+          right: 20px;
+          background-color: #202c33;
+          color: #00a884;
+          border: 1px solid rgba(255,255,255,0.1);
+          padding: 8px 12px;
+          border-radius: 20px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .media-modal-content {
+          background: #202c33;
+          padding: 20px;
+          border-radius: 16px;
+          width: 90%;
+          max-width: 400px;
+          position: relative;
+        }
+        .close-btn {
+          position: absolute;
+          top: -40px;
+          right: 0;
+          background: none;
+          border: none;
+          color: white;
+          font-size: 1.5rem;
+          cursor: pointer;
+        }
+
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  )
+}

@@ -10,7 +10,14 @@ import { isAdmin } from '@/lib/rbac'
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || !isAdmin((session.user as any).role)) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    }
+
+    const userRole = (session.user as any).role
+    const hasAccess = isAdmin(userRole) || userRole === 'OPERATOR' || userRole === 'OPERADOR'
+    
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
@@ -35,8 +42,10 @@ export async function GET(request: Request) {
     if (roles) {
       // If filtering by specific roles, we still respect the Superadmin hiding rule
       const requestedRoles = roles.split(',')
+      const validRoles = ['SUPERADMIN', 'ADMIN', 'ADMINISTRADORA', 'OPERATOR', 'SUBCONTRATISTA']
+      
       whereClause.role = { 
-        in: isSuperAdmin ? requestedRoles : requestedRoles.filter(r => r !== 'SUPERADMIN')
+        in: requestedRoles.filter(r => validRoles.includes(r) && (isSuperAdmin || r !== 'SUPERADMIN'))
       }
     } else if (role) {
       if (role === 'SUPERADMIN' && !isSuperAdmin) {

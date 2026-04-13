@@ -106,12 +106,11 @@ export default function BudgetBuilder({
 
   const filteredMaterials = useMemo(() => {
     if (!searchMaterial.trim()) return []
-    const term = searchMaterial.toLowerCase()
-    return materials.filter(m => 
-      m.name.toLowerCase().includes(term) || 
-      (m.code && m.code.toLowerCase().includes(term)) ||
-      (m.category && m.category.toLowerCase().includes(term))
-    )
+    const terms = searchMaterial.toLowerCase().split(/\s+/).filter(Boolean)
+    return materials.filter(m => {
+      const targetText = `${m.name || ''} ${m.code || ''} ${m.category || ''}`.toLowerCase()
+      return terms.every(term => targetText.includes(term))
+    })
   }, [searchMaterial, materials])
 
   const selectFromCatalog = (m: any) => {
@@ -571,6 +570,7 @@ export default function BudgetBuilder({
           .budget-table th:nth-child(1), .budget-table td:nth-child(1) {
             display: none;
           }
+          /* Hide Unit Price on mobile to save space, show only total */
           .budget-table th:nth-child(4), .budget-table td:nth-child(4) {
             display: none; 
           }
@@ -587,6 +587,7 @@ export default function BudgetBuilder({
           .tfoot-label, .tfoot-label-total {
             padding: 10px 8px !important;
             font-size: 0.7rem !important;
+            word-break: break-word;
           }
           .tfoot-value-total {
             font-size: 1rem !important;
@@ -605,6 +606,7 @@ export default function BudgetBuilder({
             height: auto;
             max-height: none;
             width: auto;
+            border: 2px solid var(--primary);
           }
         }
 
@@ -614,6 +616,9 @@ export default function BudgetBuilder({
            }
            .tfoot-value-total {
              font-size: 0.9rem !important;
+           }
+           .tfoot-label-total {
+             width: 60% !important;
            }
         }
       `}</style>

@@ -77,22 +77,21 @@ export default function AdminCalendarClient({ operators, projects }: AdminCalend
 
   return (
     <div className="admin-calendar-page animate-fade-in">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
+      <div className="page-header calendar-header-mobile">
         <div>
           <h1 className="page-title">Calendario Maestro</h1>
           <p className="page-subtitle">Gestión centralizada de tareas y agenda del equipo</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditingEvent(null); setIsModalOpen(true); }}>
+        <button className="btn btn-primary add-task-btn" onClick={() => { setEditingEvent(null); setIsModalOpen(true); }}>
           + Nueva Tarea
         </button>
       </div>
 
-      <div className="card mb-lg" style={{ marginTop: 'var(--space-md)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-md)', padding: 'var(--space-sm)' }}>
-           <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filtrar por Operador:</label>
+      <div className="card mb-lg calendar-card" style={{ marginTop: 'var(--space-md)' }}>
+        <div className="filter-container">
+           <label className="filter-label">Filtrar por Operador:</label>
            <select 
-             className="form-select" 
-             style={{ width: 'auto', minWidth: '200px' }}
+             className="form-select operator-select" 
              value={selectedOperatorId}
              onChange={(e) => setSelectedOperatorId(e.target.value)}
            >
@@ -101,7 +100,7 @@ export default function AdminCalendarClient({ operators, projects }: AdminCalend
                <option key={op.id} value={op.id}>{op.name}</option>
              ))}
            </select>
-           {loading && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Cargando agenda...</span>}
+           {loading && <span className="loading-text">Cargando agenda...</span>}
         </div>
 
         <div className="calendar-wrapper">
@@ -140,6 +139,57 @@ export default function AdminCalendarClient({ operators, projects }: AdminCalend
       <style jsx>{`
         .calendar-wrapper {
           min-height: 600px;
+        }
+        .calendar-header-mobile {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 15px;
+        }
+        .filter-container {
+          display: flex;
+          align-items: center;
+          gap: var(--space-md);
+          margin-bottom: var(--space-md);
+          padding: var(--space-sm);
+        }
+        .filter-label {
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: var(--text-muted);
+        }
+        .operator-select {
+          width: auto;
+          min-width: 200px;
+        }
+        .loading-text {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+        }
+
+        @media (max-width: 768px) {
+          .calendar-header-mobile {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .add-task-btn {
+            width: 100%;
+          }
+          .filter-container {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+          }
+          .operator-select {
+            width: 100%;
+          }
+          .calendar-card {
+            padding: var(--space-md) !important;
+          }
+          .calendar-wrapper {
+            min-height: 400px;
+          }
         }
       `}</style>
     </div>

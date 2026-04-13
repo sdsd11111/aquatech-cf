@@ -186,8 +186,15 @@ export default function TeamPage() {
     return new Intl.DateTimeFormat('es-ES', { month: 'short', day: 'numeric' }).format(new Date(date))
   }
 
+  useEffect(() => {
+    console.log("TeamPage Loaded - Debugging Responsiveness");
+  }, []);
+
   return (
     <div className="operator-dashboard">
+      <div style={{ backgroundColor: 'red', color: 'white', padding: '10px', textAlign: 'center', fontWeight: 'bold' }}>
+        DEBUG: COMPONENTE ACTUALIZADO - {new Date().toLocaleTimeString()}
+      </div>
       <div className="operator-header" style={{ marginBottom: '30px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <div>
           <h2 className="page-title">Gestión de Equipo</h2>
@@ -207,32 +214,35 @@ export default function TeamPage() {
         )}
       </div>
       
-      <div className="tabs" style={{ marginBottom: '30px' }}>
-        <button 
-          className={`tab ${activeTab === 'ALL' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ALL')}
-        >
-          Todos
-        </button>
-        <button 
-          className={`tab ${activeTab === 'MANAGEMENT' ? 'active' : ''}`}
-          onClick={() => setActiveTab('MANAGEMENT')}
-        >
-          Administración
-        </button>
-        <button 
-          className={`tab ${activeTab === 'OPERATORS' ? 'active' : ''}`}
-          onClick={() => setActiveTab('OPERATORS')}
-        >
-          Operadores
-        </button>
-        <button 
-          className={`tab ${activeTab === 'SUBCONTRACTORS' ? 'active' : ''}`}
-          onClick={() => setActiveTab('SUBCONTRACTORS')}
-        >
-          Subcontratistas
-        </button>
+      <div className="tab-navigation-container">
+        <div className="tabs">
+          <button 
+            className={`tab ${activeTab === 'ALL' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ALL')}
+          >
+            Todos
+          </button>
+          <button 
+            className={`tab ${activeTab === 'MANAGEMENT' ? 'active' : ''}`}
+            onClick={() => setActiveTab('MANAGEMENT')}
+          >
+            Administración
+          </button>
+          <button 
+            className={`tab ${activeTab === 'OPERATORS' ? 'active' : ''}`}
+            onClick={() => setActiveTab('OPERATORS')}
+          >
+            Operadores
+          </button>
+          <button 
+            className={`tab ${activeTab === 'SUBCONTRACTORS' ? 'active' : ''}`}
+            onClick={() => setActiveTab('SUBCONTRACTORS')}
+          >
+            Subcontratistas
+          </button>
+        </div>
       </div>
+
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
         {/* Management (Admins & Superadmin) */}
@@ -317,7 +327,7 @@ export default function TeamPage() {
           backdropFilter: 'blur(16px) saturate(180%)',
           padding: '20px'
         }}>
-          <div className="card animate-scale-in" style={{ 
+          <div className="card animate-scale-in modal-content-premium" style={{ 
             width: '850px', 
             maxWidth: '100%', 
             maxHeight: '90vh',
@@ -366,9 +376,9 @@ export default function TeamPage() {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '40px', marginBottom: '40px' }}>
+              <div className="modal-form-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '40px', marginBottom: '40px' }}>
                 {/* Left side: Avatar */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
+                <div className="avatar-upload-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
                   <div 
                     onClick={() => document.getElementById('user-image-upload')?.click()}
                     style={{ 
@@ -414,7 +424,7 @@ export default function TeamPage() {
                 </div>
 
                 {/* Right side: Basic fields */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                <div className="modal-basic-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
                     <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nombre Completo *</label>
                     <input type="text" className="form-input" style={{ padding: '14px 18px', borderRadius: '14px', fontSize: '1rem' }} required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Ej: Abel Aquatech" />
@@ -470,7 +480,7 @@ export default function TeamPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr', gap: '24px', marginBottom: '40px' }}>
+              <div className="modal-contact-fields" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.5fr', gap: '24px', marginBottom: '40px' }}>
                 <div className="form-group">
                   <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correo Electrónico *</label>
                   <input type="email" className="form-input" style={{ padding: '14px 18px', borderRadius: '14px' }} required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="ejemplo@aquatech.com" />
@@ -558,7 +568,7 @@ export default function TeamPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '20px' }}>
+              <div className="modal-actions" style={{ display: 'flex', gap: '20px' }}>
                 <button type="button" className="btn btn-ghost" style={{ flex: 1, padding: '18px', borderRadius: '18px', fontWeight: 'bold' }} onClick={() => { setShowModal(false); resetForm(); }}>Descartar</button>
                 <button type="submit" className="btn btn-primary" style={{ flex: 2, padding: '18px', borderRadius: '18px', fontWeight: 'bold', fontSize: '1rem', boxShadow: '0 15px 30px rgba(56, 189, 248, 0.3)' }}>
                   Registrar Miembro del Equipo
@@ -568,6 +578,159 @@ export default function TeamPage() {
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        .operator-dashboard {
+          padding: 20px;
+          padding-bottom: 120px;
+          min-height: 100vh;
+          max-width: 1400px;
+          width: 100%;
+          margin: 0 auto;
+          box-sizing: border-box;
+          overflow-x: hidden !important;
+          position: relative;
+        }
+
+
+
+
+        .operator-dashboard * {
+          box-sizing: border-box;
+        }
+
+        .grid-responsive {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+          gap: 25px;
+          width: 100%;
+        }
+
+
+        .user-card-premium {
+          min-height: 300px;
+        }
+
+
+        .tab-navigation-container {
+          overflow-x: auto;
+          margin-bottom: 30px;
+          padding: 0 0 10px 0;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+
+        .tab-navigation-container::-webkit-scrollbar {
+          display: none;
+        }
+
+        .tabs {
+          display: flex;
+          gap: 8px;
+          min-width: max-content;
+        }
+
+        .tab {
+          padding: 12px 24px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          color: var(--text-muted);
+          cursor: pointer;
+          font-weight: 700;
+          font-size: 0.9rem;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          white-space: nowrap;
+        }
+
+        .tab.active {
+          background: var(--primary);
+          color: white;
+          border-color: var(--primary);
+          box-shadow: 0 10px 20px rgba(56, 189, 248, 0.2);
+        }
+
+        .tab:hover:not(.active) {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        @media (max-width: 768px) {
+          .operator-dashboard {
+            padding: 15px;
+          }
+          .operator-header {
+            align-items: stretch !important;
+          }
+          .operator-header .btn-primary {
+            max-width: none !important;
+          }
+          .grid-responsive {
+            grid-template-columns: 1fr !important;
+            gap: 20px;
+            width: 100%;
+          }
+          
+          /* Modal Responsiveness */
+          .modal-content-premium {
+            border-radius: 24px !important;
+          }
+          .modal-form-grid {
+            grid-template-columns: 1fr !important;
+            gap: 30px !important;
+          }
+          .modal-basic-fields, .modal-contact-fields {
+            grid-template-columns: 1fr !important;
+            gap: 20px !important;
+          }
+          .modal-actions {
+            flex-direction: column-reverse;
+            gap: 12px !important;
+          }
+          .modal-actions button {
+            width: 100%;
+          }
+          .user-card-content {
+            padding: 18px !important;
+          }
+          .user-card-footer {
+            padding: 12px 18px !important;
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+
+          .user-card-footer .btn-delete-wrapper {
+             width: 100%;
+             display: flex;
+             justify-content: flex-end;
+          }
+
+
+          .user-profile-info {
+            gap: 12px !important;
+            flex-wrap: wrap !important;
+          }
+          .user-profile-info h4 {
+            font-size: 0.95rem !important;
+          }
+          .user-avatar-wrapper {
+            width: 48px !important;
+            height: 48px !important;
+          }
+          .user-card-premium {
+             width: 100% !important;
+             max-width: calc(100vw - 30px) !important;
+             overflow: hidden !important;
+             min-height: auto !important;
+          }
+
+        }
+      `}</style>
+
+
+
     </div>
   )
 }
@@ -585,7 +748,6 @@ function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }
   
   const canDelete = isCurrentUserSuperAdmin || (
     (currentUserRole === 'ADMIN' || currentUserRole === 'ADMINISTRADORA' || currentUserRole === 'ADMINISTRADOR') && 
-    user.role !== 'OPERATOR' && 
     user.role !== 'SUPERADMIN' &&
     user.id !== currentUserId
   )
@@ -593,7 +755,7 @@ function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }
   return (
     <Link 
       href={`/admin/team/${user.id}`}
-      style={{ textDecoration: 'none' }}
+      style={{ textDecoration: 'none', display: 'block', width: '100%' }}
     >
       <div className="card h-full p-0 overflow-hidden user-card-premium" style={{ 
         display: 'flex', flexDirection: 'column', 
@@ -601,12 +763,11 @@ function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }
         border: '1px solid rgba(255, 255, 255, 0.03)',
         background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.6) 100%)',
         backdropFilter: 'blur(12px)',
-        minHeight: '300px',
         transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
         position: 'relative',
         boxShadow: isSuperAdminUser ? `0 20px 50px ${statusColor}10` : '0 15px 35px rgba(0,0,0,0.2)',
       }}>
-        <div style={{ padding: '32px' }}>
+        <div className="user-card-content" style={{ padding: '32px' }}>
           {/* Header Badge */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <div style={{ 
@@ -635,14 +796,16 @@ function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }
           </div>
 
           {/* User Profile Info */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' }}>
-            <div style={{ 
+          <div className="user-profile-info" style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '30px' }}>
+            <div className="user-avatar-wrapper" style={{ 
               width: '74px', height: '74px', 
               borderRadius: '24px', 
               padding: '3px',
+              flexShrink: 0,
               background: `linear-gradient(135deg, ${statusColor}50, transparent)`,
               border: '1px solid rgba(255,255,255,0.1)'
             }}>
+
               <div style={{ width: '100%', height: '100%', borderRadius: '21px', overflow: 'hidden', backgroundColor: 'var(--bg-deep)' }}>
                 {user.image ? (
                   <img src={user.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt={user.name} />
@@ -653,10 +816,11 @@ function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }
                 )}
               </div>
             </div>
-            <div style={{ minWidth: 0 }}>
-              <h4 style={{ fontSize: '1.25rem', fontWeight: '800', margin: '0 0 4px 0', color: '#fff', letterSpacing: '-0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</h4>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <h4 style={{ fontSize: '1.25rem', fontWeight: '800', margin: '0 0 4px 0', color: '#fff', letterSpacing: '-0.02em', wordBreak: 'break-word' }}>{user.name}</h4>
               <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', margin: 0 }}>@{user.username}</p>
             </div>
+
           </div>
 
           {/* Quick Stats / Info */}
@@ -665,13 +829,14 @@ function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }
               <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
               </div>
-              {user.phone || 'Sin teléfono'}
+              <span style={{ overflowWrap: 'break-word', wordBreak: 'break-all', minWidth: 0, flex: 1 }}>{user.phone || 'Sin teléfono'}</span>
             </div>
           </div>
+
         </div>
 
         {/* Card Footer */}
-        <div style={{ 
+        <div className="user-card-footer" style={{ 
           marginTop: 'auto', 
           padding: '24px 32px', 
           backgroundColor: 'rgba(255,255,255,0.015)',
@@ -685,7 +850,7 @@ function UserCard({ user, onDelete, formatDate, currentUserRole, currentUserId }
              <span style={{ fontSize: '0.85rem', color: '#fff', fontWeight: '700' }}>{formatDate(user.createdAt)}</span>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div className="btn-delete-wrapper" style={{ display: 'flex', gap: '10px' }}>
              {canDelete && (
                 <button 
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(user.id); }}

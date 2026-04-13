@@ -19,11 +19,16 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
     }
   })
 
-  if (!quote) notFound()
+  const projects = await prisma.project.findMany({
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, title: true, clientId: true, client: { select: { name: true } } }
+  })
+
+  if (!quote) return <div>Cotización no encontrada</div>
 
   return (
     <div className="p-6">
-      <QuoteDetailClient quote={deepSerialize(quote)} />
+      <QuoteDetailClient quote={deepSerialize(quote)} projects={projects} />
     </div>
   )
 }

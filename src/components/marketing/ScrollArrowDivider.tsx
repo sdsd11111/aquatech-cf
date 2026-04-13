@@ -14,8 +14,8 @@ export function ScrollArrowDivider() {
     <div 
       style={{ 
         backgroundColor: '#004A87', 
-        paddingTop: '60px', 
-        paddingBottom: '60px', 
+        paddingTop: '8px', 
+        paddingBottom: '8px', 
         display: 'flex', 
         flexDirection: 'column', 
         alignItems: 'center', 
@@ -31,15 +31,20 @@ export function ScrollArrowDivider() {
           border: 'none', 
           cursor: 'pointer', 
           display: 'grid', 
-          gridTemplateColumns: 'repeat(3, 1fr)', 
-          gap: '32px', 
+          gridTemplateColumns: 'repeat(3, auto)', 
+          columnGap: '24px', 
+          rowGap: '0px',
           position: 'relative', 
           zIndex: 10 
         }}
+        className="hover:scale-105 transition-transform"
       >
-        <ChevronDown size={32} color="white" />
-        <ChevronDown size={32} color="white" />
-        <ChevronDown size={32} color="white" />
+        <ChevronDown size={28} color="white" />
+        <ChevronDown size={28} color="white" />
+        <ChevronDown size={28} color="white" />
+        <ChevronDown size={28} color="white" style={{ marginTop: '-16px' }} />
+        <ChevronDown size={28} color="white" style={{ marginTop: '-16px' }} />
+        <ChevronDown size={28} color="white" style={{ marginTop: '-16px' }} />
       </button>
     </div>
   )

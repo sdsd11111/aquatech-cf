@@ -14,6 +14,7 @@ export default withAuth(
         if (
           pathname === "/admin/login" ||
           pathname.startsWith("/api/auth") ||
+          pathname.startsWith("/api/upload") ||
           pathname.startsWith("/api/cron") ||
           pathname.startsWith("/_next") ||
           pathname === "/favicon.ico" ||

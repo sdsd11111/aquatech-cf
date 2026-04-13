@@ -8,6 +8,7 @@ import WhatsAppButton from '../components/marketing/WhatsAppButton'
 import ScrollToTop from '../components/marketing/ScrollToTop'
 import AboutUs from '../components/marketing/AboutUs'
 import Testimonials from '../components/marketing/Testimonials'
+import ContactFAQ from '../components/marketing/ContactFAQ'
 
 // metadataBase is required in Next.js 14+ to resolve relative URLs for social sharing
 export const metadata: Metadata = {
@@ -39,8 +40,13 @@ export default function Home() {
       <CategoryGrid />
 
       {/* Quienes Somos (Historia y Filosofía) */}
-      {/* <AboutUs /> */}
-      {/* <Testimonials /> */}
+      <AboutUs />
+
+      {/* Testimonios Reales */}
+      <Testimonials />
+
+      {/* Ubicaciones y FAQ */}
+      <ContactFAQ />
 
       {/* Footer */}
       <Footer />

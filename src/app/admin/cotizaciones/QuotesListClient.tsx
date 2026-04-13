@@ -4,25 +4,86 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { formatDateEcuador } from '@/lib/date-utils'
 
-export default function QuotesListClient({ initialQuotes }: any) {
+export default function QuotesListClient({ initialQuotes, activeProjects = [] }: { initialQuotes: any[], activeProjects?: any[] }) {
   const [quotes, setQuotes] = useState(initialQuotes)
   const [filter, setFilter] = useState('ALL')
+  
+  // Modal State
+  const [modalMode, setModalMode] = useState<'LINK' | 'SHARE' | null>(null)
+  const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null)
+  const [projectId, setProjectId] = useState('')
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleDelete = async (id: number) => {
     if (!confirm('¿Estás seguro de que deseas eliminar esta cotización?')) return
 
     try {
       const res = await fetch(`/api/quotes/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      
       if (res.ok) {
         setQuotes(quotes.filter((q: any) => q.id !== id))
         alert('Cotización eliminada con éxito')
       } else {
-        alert('Error al eliminar la cotización')
+        alert(data.error || 'Error al eliminar la cotización')
       }
     } catch (error) {
       console.error(error)
       alert('Error de red al eliminar')
     }
+  }
+
+  const handleAction = async () => {
+    if (!selectedQuoteId || !projectId) return
+    
+    const targetProject = activeProjects.find(p => p.id === Number(projectId))
+    const confirmTitle = modalMode === 'LINK' ? 'VINCULAR PRESUPUESTO' : 'ENVIAR COTIZACIÓN'
+    const confirmMsg = modalMode === 'LINK' 
+      ? `¿Confirmas que el proyecto "${targetProject?.title}" tome los valores de esta cotización como su presupuesto oficial?` 
+      : `¿Confirmas enviar esta cotización al chat del proyecto "${targetProject?.title}"?`
+
+    if (!confirm(confirmMsg)) return
+
+    setLoading(true)
+    try {
+      const endpoint = modalMode === 'LINK' ? 'link' : 'share'
+      const body: any = { projectId: Number(projectId) }
+      if (modalMode === 'SHARE') body.message = message
+
+      const res = await fetch(`/api/quotes/${selectedQuoteId}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+
+      if (res.ok) {
+        alert(modalMode === 'LINK' ? 'Presupuesto vinculado correctamente.' : 'Cotización enviada al proyecto.')
+        window.location.reload()
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Error al procesar')
+      }
+    } catch (err) {
+      alert('Error de conexión')
+    } finally {
+      setLoading(false)
+      closeModal()
+    }
+  }
+
+  const openModal = (mode: 'LINK' | 'SHARE', quoteId: number) => {
+    setModalMode(mode)
+    setSelectedQuoteId(quoteId)
+    setProjectId('')
+    setMessage('')
+  }
+
+  const closeModal = () => {
+    setModalMode(null)
+    setSelectedQuoteId(null)
+    setProjectId('')
+    setMessage('')
   }
 
   const filtered = filter === 'ALL' 
@@ -36,43 +97,93 @@ export default function QuotesListClient({ initialQuotes }: any) {
       <div className="tabs" style={{ marginBottom: '20px' }}>
         <button onClick={() => setFilter('ALL')} className={`tab ${filter === 'ALL' ? 'active' : ''}`}>Todas</button>
         <button onClick={() => setFilter('PROJECT')} className={`tab ${filter === 'PROJECT' ? 'active' : ''}`}>Vinculadas a Proyectos</button>
-        <button onClick={() => setFilter('NO_PROJECT')} className={`tab ${filter === 'NO_PROJECT' ? 'active' : ''}`}>Cotizaciones Individuales (Sin Proyecto)</button>
+        <button onClick={() => setFilter('NO_PROJECT')} className={`tab ${filter === 'NO_PROJECT' ? 'active' : ''}`}>Individuales</button>
       </div>
 
-      <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-        <table style={{ minWidth: '800px', width: '100%', borderCollapse: 'collapse' }}>
+      <div className="card shadow-sm" style={{ padding: 0, overflowX: 'auto', borderRadius: '16px' }}>
+        <table style={{ minWidth: '900px', width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-deep)' }}>
-              <th style={{ padding: '15px', textAlign: 'left', whiteSpace: 'nowrap' }}>Cliente</th>
-              <th style={{ padding: '15px', textAlign: 'left', whiteSpace: 'nowrap' }}>Proyecto Relacionado</th>
-              <th style={{ padding: '15px', textAlign: 'left', whiteSpace: 'nowrap' }}>Fecha</th>
-              <th style={{ padding: '15px', textAlign: 'left', whiteSpace: 'nowrap' }}>Estado</th>
-              <th style={{ padding: '15px', textAlign: 'right', whiteSpace: 'nowrap' }}>Total</th>
-              <th style={{ padding: '15px', textAlign: 'center', whiteSpace: 'nowrap' }}>Acciones</th>
+              <th style={{ padding: '20px 15px', textAlign: 'left', whiteSpace: 'nowrap' }}>Cliente / ID</th>
+              <th style={{ padding: '20px 15px', textAlign: 'left', whiteSpace: 'nowrap' }}>Estado Presupuesto</th>
+              <th style={{ padding: '20px 15px', textAlign: 'left', whiteSpace: 'nowrap' }}>Fecha</th>
+              <th style={{ padding: '20px 15px', textAlign: 'right', whiteSpace: 'nowrap' }}>Total</th>
+              <th style={{ padding: '20px 15px', textAlign: 'center', whiteSpace: 'nowrap' }}>Acciones Especiales</th>
+              <th style={{ padding: '20px 15px', textAlign: 'center', whiteSpace: 'nowrap' }}>Gestión</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((quote: any) => (
               <tr key={quote.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <td style={{ padding: '15px' }}>{quote.client.name}</td>
-                <td style={{ padding: '15px', color: 'var(--text-muted)' }}>{quote.project?.title || 'Sin proyecto'}</td>
-                <td style={{ padding: '15px' }} suppressHydrationWarning>{formatDateEcuador(quote.createdAt)}</td>
                 <td style={{ padding: '15px' }}>
-                  {quote.project ? (
-                    <span className={`badge ${quote.project.status === 'ACTIVO' ? 'badge-info' : 'badge-neutral'}`} style={{ fontSize: '0.7rem' }}>
-                      {quote.project.status}
-                    </span>
-                  ) : ''}
+                  <div style={{ fontWeight: '600' }}>{quote.clientName || quote.client?.name || 'C. Final'}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Cotización #{quote.id}</div>
+                </td>
+                <td style={{ padding: '15px' }}>
+                   {quote.isBudget ? (
+                     <div style={{ 
+                       display: 'inline-flex', 
+                       alignItems: 'center', 
+                       gap: '6px', 
+                       color: '#ffffff', 
+                       backgroundColor: '#059669', 
+                       padding: '4px 10px', 
+                       borderRadius: '8px',
+                       boxShadow: '0 2px 6px rgba(5, 150, 105, 0.3)',
+                       border: '1px solid #34d399'
+                     }}>
+                        <span style={{ fontSize: '1.2rem' }}>💎</span>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '900', letterSpacing: '0.05em' }}>PRESUPUESTO OFICIAL</div>
+                          <div style={{ fontSize: '0.65rem', fontWeight: '600', opacity: 0.9 }}>{quote.project?.title}</div>
+                        </div>
+                     </div>
+                   ) : quote.projectId ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b' }}>
+                        <span style={{ fontSize: '1rem' }}>📎</span>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '500' }}>Vinculada a {quote.project?.title}</div>
+                          <button onClick={() => openModal('LINK', quote.id)} className="btn btn-link btn-xs" style={{ padding: 0, fontSize: '0.7rem', fontWeight: 'bold', color: 'var(--primary)' }}>Hacer Oficial</button>
+                        </div>
+                      </div>
+                   ) : (
+                     <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>Sin vinculación oficial</div>
+                   )}
+                </td>
+                <td style={{ padding: '15px' }} suppressHydrationWarning>
+                   <div style={{ fontSize: '0.85rem' }}>{formatDateEcuador(quote.createdAt)}</div>
                 </td>
                 <td style={{ padding: '15px', textAlign: 'right', fontWeight: 'bold', color: 'var(--primary)' }}>
                   $ {new Intl.NumberFormat('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(quote.totalAmount)}
                 </td>
+                <td style={{ padding: '15px', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
+                    {(!quote.projectId) && (
+                      <button 
+                        onClick={() => openModal('LINK', quote.id)}
+                        className="btn btn-primary btn-xs" 
+                        style={{ fontSize: '0.65rem', borderRadius: '6px', padding: '6px 10px' }}
+                        title="Sincronizar presupuesto del proyecto"
+                      >
+                        Vincular Presupuesto
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => openModal('SHARE', quote.id)}
+                      className="btn btn-ghost btn-xs" 
+                      style={{ fontSize: '0.65rem', borderRadius: '6px', border: '1px solid var(--primary)', padding: '6px 10px' }}
+                      title="Enviar a chat de proyecto"
+                    >
+                      Enviar a Proyecto
+                    </button>
+                  </div>
+                </td>
                 <td style={{ padding: '15px', textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                  <Link href={`/admin/cotizaciones/compuesto/${quote.id}`} className="btn btn-ghost btn-sm" title="Ver PDF">PDF</Link>
-                  <Link href={`/admin/cotizaciones/${quote.id}/edit`} className="btn btn-ghost btn-sm" title="Editar">
+                  <Link href={`/admin/cotizaciones/compuesto/${quote.id}`} className="btn btn-ghost btn-sm" title="Ver PDF" style={{ border: '1px solid var(--border)' }}>PDF</Link>
+                  <Link href={`/admin/cotizaciones/${quote.id}/edit`} className="btn btn-ghost btn-sm" title="Editar" style={{ border: '1px solid var(--border)' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </Link>
-                  <button onClick={() => handleDelete(quote.id)} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} title="Eliminar">
+                  <button onClick={() => handleDelete(quote.id)} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', border: '1px solid var(--border)' }} title="Eliminar">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>
                   </button>
                 </td>
@@ -88,6 +199,68 @@ export default function QuotesListClient({ initialQuotes }: any) {
           </tbody>
         </table>
       </div>
+
+      {/* Action Modal */}
+      {modalMode && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+           <div className="card shadow-lg" style={{ width: '100%', maxWidth: '500px', padding: '30px', borderRadius: '24px', backgroundColor: 'var(--card-bg)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h3 style={{ margin: 0 }}>{modalMode === 'LINK' ? 'Vincular Presupuesto Oficial' : 'Enviar a Proyecto'}</h3>
+                <button onClick={closeModal} className="btn btn-ghost btn-sm">✕</button>
+              </div>
+              
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '20px' }}>
+                {modalMode === 'LINK' 
+                  ? 'Esta acción hará que el proyecto seleccionado actualice su costo estimado y sus ítems de presupuesto basándose en esta cotización.'
+                  : 'Esta cotización se enviará al chat/bitácora del proyecto seleccionado únicamente como información, sin alterar el presupuesto.'}
+              </p>
+
+              <div className="form-group mb-md">
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>Proyecto Destino</label>
+                <select 
+                  className="form-input" 
+                  value={projectId} 
+                  onChange={e => setProjectId(e.target.value)}
+                  disabled={loading}
+                  style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--border)' }}
+                >
+                  <option value="">-- Selecciona un proyecto --</option>
+                  {activeProjects.map(p => (
+                    <option key={p.id} value={p.id}>{p.title} ({p.client?.name || 'S.C'})</option>
+                  ))}
+                </select>
+              </div>
+
+              {modalMode === 'SHARE' && (
+                <div className="form-group mb-lg">
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>Mensaje (Opcional)</label>
+                  <textarea 
+                    className="form-input" 
+                    value={message} 
+                    onChange={e => setMessage(e.target.value)}
+                    disabled={loading}
+                    placeholder="Ej: Hola equipo, les comparto esta propuesta para revisión..."
+                    style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', minHeight: '80px' }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button className="btn btn-ghost" style={{ flex: 1, border: '1px solid var(--border)' }} onClick={closeModal} disabled={loading}>
+                  Cancelar
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  style={{ flex: 1.5 }} 
+                  onClick={handleAction}
+                  disabled={!projectId || loading}
+                >
+                  {loading ? 'Procesando...' : (modalMode === 'LINK' ? 'Vincular como Oficial' : 'Enviar a Proyecto')}
+                </button>
+              </div>
+           </div>
+        </div>
+      )}
     </>
   )
 }

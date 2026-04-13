@@ -505,3 +505,59 @@ async function processOutboxSync() {
     };
   });
 }
+
+// ─── PUSH NOTIFICATIONS ────────────────────────────────────
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data?.json() || {};
+  } catch (e) {
+    data = { title: 'Aquatech CRM', body: event.data?.text() || 'Nueva notificación' };
+  }
+
+  const options = {
+    body: data.body || 'Nueva actualización en tu proyecto',
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/icon-192.png',
+    vibrate: [200, 100, 200, 100, 200],
+    tag: data.tag || 'general',
+    renotify: true,
+    requireInteraction: false,
+    data: {
+      url: data.url || '/admin/operador',
+      timestamp: Date.now()
+    },
+    actions: [
+      { action: 'open', title: '📂 Abrir' },
+      { action: 'dismiss', title: '✕ Cerrar' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || '🔔 Aquatech CRM', options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'dismiss') return;
+
+  const targetUrl = event.notification.data?.url || '/admin/operador';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((windowClients) => {
+        // If there's already an open window with the CRM, focus and navigate
+        for (const client of windowClients) {
+          if (client.url.includes('/admin/') && 'focus' in client) {
+            client.navigate(targetUrl);
+            return client.focus();
+          }
+        }
+        // Otherwise open a new window
+        return clients.openWindow(targetUrl);
+      })
+  );
+});
+

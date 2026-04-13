@@ -48,8 +48,8 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
 
   if (!project) notFound()
 
-  // Guard: Admin or Team Member
-  if (!canAccessProject(session.user as any, project.team)) {
+  // Guard: Admin, Creator or Team Member
+  if (!canAccessProject(session.user as any, project.team, project.createdBy ?? undefined)) {
     redirect('/admin')
   }
 

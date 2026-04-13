@@ -1,44 +1,40 @@
-import { NextResponse } from 'next/server'
-import { uploadToBunny } from '@/lib/bunny'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const formData = await req.formData()
-    const file = formData.get('file') as File
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-    }
-
-    // 50MB limit to prevent storage abuse
-    const MAX_FILE_SIZE = 50 * 1024 * 1024
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'Archivo demasiado grande (máx. 50MB)' }, { status: 413 })
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer())
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
     
-    // Using a temp folder per user
-    const folder = `projects/temp_${session.user.id}`
-    const url = await uploadToBunny(buffer, file.name, folder)
+    if (!file) {
+      return NextResponse.json({ error: 'No se incluyó ningún archivo' }, { status: 400 });
+    }
 
-    // Determine type for our frontend schema
-    let type = 'DOCUMENT'
-    if (file.type.startsWith('image/')) type = 'IMAGE'
-    else if (file.type.startsWith('video/')) type = 'VIDEO'
+    const arrayBuffer = await file.arrayBuffer();
+    const timestamp = Date.now();
+    // Limpieza de nombre
+    const cleanName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '-');
+    const filename = `${timestamp}-${cleanName}`;
+    
+    // Subida a la carpeta de cotizaciones en Bunny.net
+    const zoneUrl = `https://storage.bunnycdn.com/cesarweb/Hidromasaje-Aquatech/cotizaciones/${filename}`;
 
-    return NextResponse.json({
-      url,
-      filename: file.name,
-      mimeType: file.type,
-      type
-    })
-  } catch (error: any) {
-    console.error('File upload failed:', error)
-    return NextResponse.json({ error: 'Error al subir archivo' }, { status: 500 })
+    const response = await fetch(zoneUrl, {
+      method: 'PUT',
+      headers: {
+        'AccessKey': process.env.BUNNY_STORAGE_PASSWORD || '',
+        'Content-Type': 'application/octet-stream',
+      },
+      body: arrayBuffer,
+    });
+
+    if (response.ok) {
+      const publicUrl = `https://cesarweb.b-cdn.net/Hidromasaje-Aquatech/cotizaciones/${filename}`;
+      return NextResponse.json({ url: publicUrl });
+    } else {
+      const errorText = await response.text();
+      return NextResponse.json({ error: `Fallo CDN: ${errorText}` }, { status: 500 });
+    }
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

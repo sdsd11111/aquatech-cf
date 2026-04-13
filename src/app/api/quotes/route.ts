@@ -70,7 +70,7 @@ export async function POST(req: Request) {
         data: {
           userId: session?.user?.id ? Number(session.user.id) : null,
           clientId: finalClientId as number,
-          projectId: data.projectId ? Number(data.projectId) : null,
+          projectId: data.sendToBitacoraId ? Number(data.sendToBitacoraId) : null,
           status: data.status || 'BORRADOR',
           
           // Snapshot client data
@@ -105,32 +105,14 @@ export async function POST(req: Request) {
         include: { items: true }
       })
 
-      // Sync to Project if linked
-      if (newQuote.projectId) {
-        // Delete all project budget items
-        await tx.budgetItem.deleteMany({
-          where: { projectId: newQuote.projectId }
-        })
-
-        // Create new project budget items based on quote items
-        await tx.budgetItem.createMany({
-          data: items.map((item: any) => ({
-            projectId: newQuote.projectId as number,
-            materialId: item.materialId ? Number(item.materialId) : null,
-            name: item.description || 'Sin descripción',
-            quantity: item.quantity === 'GLOBAL' ? 1 : Number(item.quantity),
-            unit: 'UND', // Default, QuoteItem doesn't have unit
-            estimatedCost: Number(item.unitPrice)
-          }))
-        })
-
-        // Update project total
-        await tx.project.update({
-          where: { id: newQuote.projectId },
-          data: { 
-            estimatedBudget: newQuote.totalAmount,
-            // If quote is already accepted, start project
-            status: newQuote.status === 'ACEPTADA' ? 'ACTIVO' : undefined
+      // Send to Bitácora if requested (Standalone, no permanent link)
+      if (data.sendToBitacoraId) {
+        await tx.chatMessage.create({
+          data: {
+            projectId: Number(data.sendToBitacoraId),
+            userId: Number(session.user.id),
+            content: `📄 NUEVA COTIZACIÓN GENERADA (#${newQuote.id})\n\nTotal: $${Number(newQuote.totalAmount).toFixed(2)}\n\nEsta es una copia informativa enviada desde el panel de cotizaciones.`,
+            type: 'TEXT'
           }
         })
       }

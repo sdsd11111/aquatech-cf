@@ -1,6 +1,6 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { signOut, useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
@@ -144,6 +144,8 @@ import { useLocalStorage } from '@/hooks/useLocalStorage'
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const chatView = searchParams.get('view') === 'chat' || pathname.includes('/proyecto/') && (pathname.endsWith('/chat') || searchParams.get('view') === 'chat')
   const { data: session, status } = useSession()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [openMenus, setOpenMenus] = useLocalStorage<Record<string, boolean>>('sidebar_open_menus', {
@@ -182,6 +184,45 @@ export default function Sidebar() {
     }
   }, [session, status])
 
+  const handleLogout = async () => {
+    try {
+      // Unsubscribe from push if active
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.getSubscription()
+          if (sub) await sub.unsubscribe()
+        } catch (e) {}
+      }
+      
+      // Clear offline db immediately
+      import('dexie').then((m) => {
+        const Dexie = m.default;
+        Dexie.delete('AquatechOfflineDB').catch(() => {})
+      }).catch(() => {})
+      
+      localStorage.clear()
+      sessionStorage.clear()
+
+      // Flush Service Worker Caches
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        try {
+          const names = await caches.keys()
+          for (const name of names) {
+            await caches.delete(name)
+          }
+        } catch (e) {}
+      }
+      
+      // Attempt NextAuth signout (will fail if fully offline, but that's fine)
+      await signOut({ redirect: false })
+    } catch (e) {
+      console.warn('Offline logout fallback', e)
+    }
+    
+    // Force hard reload to login page
+    window.location.href = '/admin/login'
+  }
   if (status === 'loading' && !offlineUser) {
     return (
       <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
@@ -307,9 +348,54 @@ export default function Sidebar() {
     })
   })).filter(section => section.items.length > 0)
 
-  const filteredOperatorNavItems = dynamicOperatorNavItems.map(section => ({
+  const additionalAdminItems = adminNavItems.flatMap(sec => sec.items).filter(item => {
+    const moduleSlug = item.label.toLowerCase().replace(/\s+/g, '_')
+    const slugMap: Record<string, string> = {
+      'dashboard': 'dashboard',
+      'marketing': 'marketing',
+      'blog': 'blog',
+      'calendario_maestro': 'calendario',
+      'proyectos': 'proyectos'
+    }
+    const slug = slugMap[moduleSlug] || moduleSlug
+    
+    // Skip operator base modules
+    if (['cotizaciones', 'inventario', 'recursos', 'conectar_telefono'].includes(slug)) return false;
+    
+    return hasModuleAccess(userPermissions, slug, effectiveRole)
+  });
+
+  const additionalAdminItemsReady = additionalAdminItems.map(item => {
+    if (item.subItems) {
+       const newSubs = item.subItems.filter(sub => {
+         const l = sub.label.toLowerCase().replace(/\s+/g, '_')
+         const sSlug = l === 'gestión_de_equipo' ? 'equipo' : l;
+         return hasModuleAccess(userPermissions, sSlug, effectiveRole)
+       })
+       return { ...item, subItems: newSubs }
+    }
+    return item;
+  }).filter(item => {
+    if (item.label === 'Proyectos' && (!item.subItems || item.subItems.length === 0)) {
+        // Operators have their own "Mis Proyectos", hide default admin "Proyectos" unless it has allowed subItems (like Reportes, Equipo)
+        return false; 
+    }
+    return true;
+  });
+
+  const operatorWithExtras = [...dynamicOperatorNavItems];
+  if (additionalAdminItemsReady.length > 0) {
+    operatorWithExtras.push({
+      section: 'MÓDULOS ADMINISTRATIVOS',
+      items: additionalAdminItemsReady
+    });
+  }
+
+  const filteredOperatorNavItems = operatorWithExtras.map(section => ({
     ...section,
     items: section.items.filter(item => {
+      if (additionalAdminItemsReady.includes(item)) return true;
+
       const moduleSlug = item.label.toLowerCase().replace(/\s+/g, '_')
       const slugMap: Record<string, string> = {
         'mis_proyectos': 'proyectos',
@@ -321,7 +407,7 @@ export default function Sidebar() {
       const slug = slugMap[moduleSlug] || moduleSlug
       return hasModuleAccess(userPermissions, slug, effectiveRole)
     })
-  }))
+  })).filter(section => section.items.length > 0)
 
   const navItems = isAdmin ? filteredAdminNavItems : filteredOperatorNavItems as NavSection[]
 
@@ -449,7 +535,7 @@ export default function Sidebar() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className={`sidebar-user ${isAdmin ? 'admin-no-profile' : ''}`} onClick={() => signOut({ callbackUrl: '/admin/login' })}>
+          <div className={`sidebar-user ${isAdmin ? 'admin-no-profile' : ''}`} onClick={handleLogout}>
             {!isAdmin ? (
               <>
                 <div className="sidebar-avatar">{userInitials}</div>
@@ -480,7 +566,7 @@ export default function Sidebar() {
       </aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="mobile-nav">
+      <nav className="mobile-nav" style={chatView ? { display: 'none' } : undefined}>
         {isAdmin ? (
           <>
             {[
@@ -502,7 +588,7 @@ export default function Sidebar() {
                 {item.label}
               </Link>
             ))}
-            <button className="mobile-nav-item" onClick={() => signOut({ callbackUrl: '/admin/login' })} style={{ background: 'none', border: 'none' }}>
+            <button className="mobile-nav-item" onClick={handleLogout} style={{ background: 'none', border: 'none' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
               Salir
             </button>
@@ -522,7 +608,7 @@ export default function Sidebar() {
                 {item.label}
               </Link>
             ))}
-            <button className="mobile-nav-item" onClick={() => signOut({ callbackUrl: '/admin/login' })} style={{ background: 'none', border: 'none' }}>
+            <button className="mobile-nav-item" onClick={handleLogout} style={{ background: 'none', border: 'none' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
               Salir
             </button>
@@ -544,7 +630,7 @@ export default function Sidebar() {
                 {item.label}
               </Link>
             ))}
-            <button className="mobile-nav-item" onClick={() => signOut({ callbackUrl: '/admin/login' })} style={{ background: 'none', border: 'none' }}>
+            <button className="mobile-nav-item" onClick={handleLogout} style={{ background: 'none', border: 'none' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
               Salir
             </button>

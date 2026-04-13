@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import { uploadToBunny } from '@/lib/bunny'
+import { notifyProjectTeam } from '@/lib/push'
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -60,7 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const session = await getServerSession(authOptions)
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       
-    const { phaseId, content, type, lat, lng, media, createdAt } = await req.json()
+    const { phaseId, content, type, lat, lng, media, createdAt, extraData } = await req.json()
     const projectId = Number(id)
     const userId = Number(session.user.id)
     
@@ -117,6 +118,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         type: finalType,
         lat: lat ? Number(lat) : null,
         lng: lng ? Number(lng) : null,
+        extraData: extraData ? extraData : undefined,
         createdAt: createdAt ? new Date(createdAt) : undefined,
         media: (mediaUrl || (media && media.url)) ? {
           create: {
@@ -125,8 +127,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             mimeType: media.mimeType || 'image/jpeg'
           }
         } : undefined
+      },
+      include: {
+        media: true
       }
     })
+
+    // If it's an expense, record it in the expenses table too (EXCEPT if it's just a note)
+    if (finalType === 'EXPENSE_LOG' && extraData && extraData.amount !== undefined && !extraData.isNote) {
+      await prisma.expense.create({
+        data: {
+          projectId,
+          userId,
+          amount: Number(extraData.amount),
+          description: content || 'Gasto registrado desde chat',
+          category: extraData.category || 'OTRO',
+          date: extraData.date ? new Date(extraData.date) : new Date(),
+          lat: lat ? Number(lat) : null,
+          lng: lng ? Number(lng) : null,
+        }
+      })
+    }
+
+    // 🔔 Push Notification to team (fire-and-forget)
+    const pushBody = content?.substring(0, 80) || (mediaUrl || media?.url ? '📎 Nuevo archivo adjunto' : 'Nuevo mensaje')
+    notifyProjectTeam(
+      projectId, userId,
+      `💬 ${session.user.name}`,
+      pushBody,
+      `/admin/operador/proyecto/${projectId}?view=chat`,
+      `chat-${projectId}`
+    )
 
     return NextResponse.json(msg)
   } catch (error) {

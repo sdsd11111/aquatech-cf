@@ -13,11 +13,12 @@ export default function MaterialsClient({ initialMaterials, categories }: any) {
     code: '', name: '', category: '', unit: 'unidad', unitPrice: '', stock: '0', description: ''
   })
 
-  const filtered = materials.filter((m: any) => 
-    m.name.toLowerCase().includes(search.toLowerCase()) || 
-    m.code.toLowerCase().includes(search.toLowerCase()) ||
-    m.category?.toLowerCase().includes(search.toLowerCase())
-  )
+  const searchTerms = search.toLowerCase().split(/\s+/).filter(Boolean)
+  const filtered = materials.filter((m: any) => {
+    if (searchTerms.length === 0) return true
+    const targetText = `${m.name || ''} ${m.code || ''} ${m.category || ''}`.toLowerCase()
+    return searchTerms.every(term => targetText.includes(term))
+  })
 
   const handleOpenModal = (m: any = null) => {
     if (m) {

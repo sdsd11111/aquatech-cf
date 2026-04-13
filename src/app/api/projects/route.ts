@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getLocalNow, forceEcuadorTZ } from '@/lib/date-utils'
 import { isAdmin, isOperator } from '@/lib/rbac'
+import { notifyUser } from '@/lib/push'
 
 export async function GET(request: Request) {
   try {
@@ -26,24 +27,10 @@ export async function GET(request: Request) {
     }
 
     if (isOperator(userRole)) {
-      whereClause.OR = [
-        {
-          team: {
-            some: {
-              userId: Number(userId)
-            }
-          }
-        },
-        {
-          createdBy: Number(userId)
+      whereClause.team = {
+        some: {
+          userId: Number(userId)
         }
-      ]
-      if (!whereClause.status) {
-        // Operators only see their own LEADs, but not other people's LEADs.
-        // The OR clause already restricts to their team or created by them.
-        // We can just leave status open so they see their leads, 
-        // OR if you still want to hide their own leads for some reason, we'd add it to AND.
-        // It makes sense they see their own leads.
       }
     }
 
@@ -118,6 +105,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan campos obligatorios. Asegúrese de ingresar el título y de tener un cliente seleccionado o creado.' }, { status: 400 })
     }
 
+    if (!budgetItems || budgetItems.length === 0) {
+      return NextResponse.json({ error: 'Es obligatorio incluir los ítems de la cotización para crear el proyecto.' }, { status: 400 })
+    }
+
     const project = await prisma.$transaction(async (tx) => {
       // 1. Get or Create Client
       let targetClientId = clientId ? Number(clientId) : null
@@ -162,7 +153,7 @@ export async function POST(request: Request) {
           title,
           type: mappedType as any,
           subtype: subtype || null,
-          status: isOp ? 'LEAD' : (status || 'ACTIVO'),
+          status: status || 'LEAD',
           startDate: startDate ? new Date(forceEcuadorTZ(startDate)) : new Date(),
           endDate: endDate ? new Date(endDate) : null,
           address: address || null,
@@ -201,7 +192,7 @@ export async function POST(request: Request) {
             }))
           },
           team: {
-            create: (!isOp ? (team || []) : []).map((id: string | number) => ({
+            create: (team || []).map((id: string | number) => ({
               userId: Number(id)
             }))
           },
@@ -258,6 +249,23 @@ export async function POST(request: Request) {
 
       return newProject
     }, { timeout: 20000 })
+
+    // 🔔 Push Notification: Notify assigned team members
+    if (team && team.length > 0) {
+      const creatorId = Number(userId)
+      for (const memberId of team) {
+        const mid = Number(memberId)
+        if (mid !== creatorId) {
+          notifyUser(
+            mid,
+            '📊 Nuevo Proyecto Asignado',
+            `Te asignaron al proyecto: ${title}`,
+            `/admin/operador`,
+            `project-new-${project.id}`
+          )
+        }
+      }
+    }
 
     return NextResponse.json(project, { status: 201 })
   } catch (error: any) {

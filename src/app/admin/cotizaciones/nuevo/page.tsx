@@ -11,6 +11,7 @@ function NewQuoteContent() {
 
   const [clients, setClients] = useState<any[]>([])
   const [materials, setMaterials] = useState<any[]>([])
+  const [projects, setProjects] = useState<any[]>([])
   const [prefetchedProject, setPrefetchedProject] = useState<any>(null)
   const [initializing, setInitializing] = useState(true)
 
@@ -24,7 +25,16 @@ function NewQuoteContent() {
         setClients(cachedClients)
         setMaterials(cachedMaterials)
 
-        // 2. If online and has projectId, try to fetch the specific project for budget conversion
+        // 2. Fetch projects for linking
+        if (navigator.onLine) {
+           const projRes = await fetch('/api/projects?all=true')
+           if (projRes.ok) {
+             const projData = await projRes.json()
+             setProjects(Array.isArray(projData) ? projData : [])
+           }
+        }
+
+        // 3. If online and has projectId, try to fetch the specific project for budget conversion
         if (projectId && navigator.onLine) {
           const res = await fetch(`/api/projects/${projectId}`)
           if (res.ok) {
@@ -78,6 +88,7 @@ function NewQuoteContent() {
       <QuoteFormClient 
         clients={clients} 
         materials={materials}
+        projects={projects}
         prefetchedProject={prefetchedProject}
       />
     </div>

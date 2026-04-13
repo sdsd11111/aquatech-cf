@@ -41,11 +41,12 @@ export function isSubcontractor(role?: string | null): boolean {
 
 /**
  * Helper to check if a user has access to a project.
- * Managers have access to all. Operators only to those they are part of.
+ * Managers have access to all. Operators only to those they are part of or created.
  */
-export function canAccessProject(user: { id: string | number; role: string }, projectTeam: { userId: number }[]): boolean {
+export function canAccessProject(user: { id: string | number; role: string }, projectTeam: { userId: number }[], creatorId?: number): boolean {
   if (isAdmin(user.role)) return true
-  return projectTeam.some(member => String(member.userId) === String(user.id))
+  const uid = String(user.id)
+  return projectTeam.some(member => String(member.userId) === uid)
 }
 
 /**

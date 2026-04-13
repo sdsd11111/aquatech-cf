@@ -10,6 +10,7 @@ import { formatToEcuador, ECUADOR_TIMEZONE, getLocalNow, formatDateEcuador, form
 import MediaCapture from '@/components/MediaCapture'
 import { useSession } from 'next-auth/react'
 import { PROJECT_TYPES, translateType, PROJECT_CATEGORIES, translateCategory } from '@/lib/constants'
+import ProjectChatUnified from '@/components/chat/ProjectChatUnified'
 
 export default function ProjectDetailClient({ project, availableOperators = [] }: any) {
   const router = useRouter()
@@ -594,7 +595,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
   const grandTotal = Number(project.estimatedBudget) || 0
   const theoreticalBudget = grandTotal / 1.15
   const ivaAmount = grandTotal - theoreticalBudget
-  const realExpenses = project.expenses
+  const realExpenses = (expenses || [])
     .filter((exp: any) => !exp.isNote)
     .reduce((acc: number, exp: any) => acc + Number(exp.amount), 0)
   const expenseRatio = theoreticalBudget > 0 ? Math.min((realExpenses / theoreticalBudget) * 100, 100) : 0
@@ -674,6 +675,81 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
         })
         setMessage('')
         setShowMediaCapture(null)
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Error sending message:', error)
+      alert('Error al enviar el mensaje')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  // Handler for ProjectChatUnified component
+  const handleChatUnifiedSend = async (content: string, type: string, extraData?: any) => {
+    setIsSending(true)
+    try {
+      let payload: any = {
+        content,
+        phaseId: activePhase,
+        type: ['EXPENSE_LOG', 'NOTE', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'].includes(type) ? type : 'TEXT',
+        extraData: extraData || {}
+      }
+
+      if (extraData?.file) {
+        const { uploadToBunnyClientSide } = await import('@/lib/storage-client')
+        const file = extraData.file as File
+        const uploadResult = await uploadToBunnyClientSide(file, file.name, `projects/${project.id}/chat`)
+        payload.media = {
+          url: uploadResult.url,
+          filename: uploadResult.filename,
+          mimeType: file.type
+        }
+        if (type === 'FILE') {
+          payload.type = file.type.startsWith('image/') ? 'IMAGE' : 
+                         file.type.startsWith('video/') ? 'VIDEO' : 
+                         file.type.startsWith('audio/') ? 'AUDIO' : 'DOCUMENT';
+        }
+        // If it's another type (like EXPENSE_LOG) but has a file, 
+        // we keep the original type but the media is already attached in payload.media
+      }
+
+      // Ensure phaseId from extraData (selected in chat) overrides the activePhase if present
+      if (extraData?.phaseId) {
+        payload.phaseId = extraData.phaseId;
+      }
+
+      const res = await fetch(`/api/projects/${project.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (res.ok) {
+        const newMessage = await res.json()
+        setChatMessages((prev: any) => {
+          const exists = prev.some((m: any) => m.id === newMessage.id)
+          if (exists) return prev
+          return [...prev, {
+            ...newMessage,
+            isMe: true,
+            userName: session?.user?.name || 'Administrador'
+          }]
+        })
+
+        // 🔥 REAL-TIME EXPENSE SYNC: If message was an expense, update the expenses list locally
+        if (payload.type === 'EXPENSE_LOG' && payload.extraData?.amount) {
+           const newExp = {
+             id: Math.random(), // Temp ID until next poll
+             amount: payload.extraData.amount,
+             description: payload.content || 'Gasto desde chat',
+             date: payload.extraData.date || new Date().toISOString(),
+             category: payload.extraData.category || 'OTRO',
+             isNote: payload.extraData.isNote || false
+           }
+           setExpenses((prev: any) => [newExp, ...prev])
+        }
+
         router.refresh()
       }
     } catch (error) {
@@ -1294,7 +1370,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
           opacity: isFichaOpen ? 1 : 0
         }}>
           <div style={{ padding: '30px', borderTop: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '30px' }}>
             
             {/* Columna Izquierda: Datos del Proyecto */}
             <div>
@@ -1373,7 +1449,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                       })()}
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '8px' }}>
                       {CATEGORIES.map(cat => (
                         <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
                           <input 
@@ -1403,7 +1479,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
                       })()}
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '8px' }}>
                       {CONTRACT_TYPES.map(cat => (
                         <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
                           <input 
@@ -1527,6 +1603,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
               <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isCostoExcedido ? 'var(--danger)' : 'var(--success)' }}>$ {realExpenses.toFixed(2)}</div>
             </div>
           </div>
+          </div>
         </div>
       </div>
 
@@ -1543,7 +1620,7 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
           scrollbarWidth: 'none'
         }}>
           {[
-            { id: 'BITACORA', label: 'Bitácora', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, activeColor: 'var(--primary)', bgColor: 'rgba(0, 112, 192, 0.1)', gradient: 'linear-gradient(135deg, #2563eb, #3b82f6)' },
+            { id: 'BITACORA', label: 'Chat', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, activeColor: 'var(--primary)', bgColor: 'rgba(0, 112, 192, 0.1)', gradient: 'linear-gradient(135deg, #2563eb, #3b82f6)' },
             { id: 'GALLERY', label: 'Galería', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>, activeColor: 'var(--warning)', bgColor: 'rgba(245, 158, 11, 0.1)', gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)' },
             { id: 'EXPENSES', label: 'Finanzas', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, activeColor: 'var(--success)', bgColor: 'rgba(34, 197, 94, 0.1)', gradient: 'linear-gradient(135deg, #10b981, #34d399)' }
           ].map(tab => (
@@ -1582,173 +1659,42 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
         </div>
 
         {/* Tab Content - Optimized with visibility display to avoid slow mounting */}
-        <div className="card" style={{ padding: '25px', minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+        <div className="card tab-content-card" style={{ 
+          padding: activeTab === 'BITACORA' ? '0px' : '25px', 
+          minHeight: '400px', 
+          display: 'flex', 
+          flexDirection: 'column',
+          border: activeTab === 'BITACORA' ? 'none' : undefined,
+          borderRadius: activeTab === 'BITACORA' ? '0px' : undefined,
+          backgroundColor: activeTab === 'BITACORA' ? 'transparent' : undefined
+        }}>
           
-          {/* 1. BITÁCORA INTERACTIVA */}
-          <div style={{ display: activeTab === 'BITACORA' ? 'flex' : 'none', flexDirection: 'column', height: 'calc(100vh - 250px)', minHeight: '400px', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text)' }}>Línea de Tiempo del Proyecto</h3>
-                <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', padding: '5px' }}>
-                  <button 
-                    onClick={() => setActivePhase(null)}
-                    style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', border: '1px solid var(--border-color)', backgroundColor: activePhase === null ? 'var(--primary)' : 'transparent', color: activePhase === null ? 'var(--bg-deep)' : 'var(--text)' }}
-                  >
-                    General
-                  </button>
-                  {project.phases.map((p: any) => (
-                    <button 
-                      key={p.id}
-                      onClick={() => setActivePhase(p.id)}
-                      style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', border: '1px solid var(--border-color)', backgroundColor: activePhase === p.id ? 'var(--primary)' : 'transparent', color: activePhase === p.id ? 'var(--bg-deep)' : 'var(--text)', whiteSpace: 'nowrap' }}
-                    >
-                      {p.title}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div 
-                  ref={chatContainerRef}
-                  onScroll={(e) => {
-                    const target = e.currentTarget;
-                    const isAtBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 50;
-                    if (isAtBottom) setHasNewMessages(false);
-                  }}
-                  style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column', gap: '15px', paddingRight: '10px', marginBottom: '20px', minHeight: 0 }}
-                >
-                  {filteredChat.map((msg: any) => {
-                    const isMe = msg.userId === Number(session?.user?.id)
-                    const isAdminMsg = true // In this view, we style it corporately
-                    
-                    return (
-                      <div key={msg.id} style={{ 
-                        alignSelf: isMe ? 'flex-end' : 'flex-start', 
-                        maxWidth: '85%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px'
-                      }}>
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '8px', 
-                          justifyContent: isMe ? 'flex-end' : 'flex-start',
-                          fontSize: '0.75rem',
-                          color: isMe ? 'var(--primary)' : 'var(--text-muted)'
-                        }}>
-                          <span style={{ fontWeight: 'bold' }}>{msg.user?.name}</span>
-                          <span style={{ opacity: 0.6 }}>{formatDateTime(msg.createdAt)}</span>
-                        </div>
-
-                        <div style={{ 
-                          backgroundColor: isMe ? 'rgba(0, 112, 192, 0.15)' : 'var(--bg-surface)',
-                          border: isMe ? '1px solid var(--primary)' : '1px solid var(--border-color)',
-                          padding: '12px 16px',
-                          borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                          color: 'var(--text)',
-                          fontSize: '0.9rem',
-                          position: 'relative',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                        }}>
-                          {msg.type === 'AUDIO' && (
-                            <div style={{ marginBottom: '8px' }}>
-                              <audio src={msg.media?.[0]?.url} controls style={{ width: '200px', height: '35px' }} />
-                            </div>
-                          )}
-                          {msg.type === 'VIDEO' && (
-                            <div style={{ marginBottom: '8px', maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
-                              <video src={msg.media?.[0]?.url} controls style={{ width: '100%', display: 'block' }} />
-                            </div>
-                          )}
-                          {msg.type === 'IMAGE' && msg.media?.[0] && (
-                            <div style={{ marginBottom: '8px', maxWidth: '300px', borderRadius: '8px', overflow: 'hidden' }}>
-                              <img src={msg.media[0].url} alt="Avance" style={{ width: '100%', objectFit: 'cover' }} />
-                            </div>
-                          )}
-                          {msg.type === 'NOTE' && (
-                             <div style={{ fontSize: '0.7rem', color: 'var(--warning)', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Nota Destacada</div>
-                          )}
-                          <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                {chatMessages.length === 0 && (
-                  <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    <p>No hay registros en esta sección.</p>
-                  </div>
-                  )}
-                </div>
-
-                {/* Floating New Messages Indicator */}
-                {hasNewMessages && (
-                  <button
-                    onClick={() => {
-                      chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })
-                      setHasNewMessages(false)
-                    }}
-                    style={{
-                      position: 'absolute',
-                      bottom: '25px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      backgroundColor: 'var(--primary)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '20px',
-                      padding: '8px 16px',
-                      fontSize: '0.8rem',
-                      fontWeight: 'bold',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      zIndex: 50,
-                      animation: 'bounce 2s infinite'
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
-                    Nuevos Mensajes (Desliza)
-                  </button>
-                )}
-              </div>
-
-              {/* Input de Chat */}
-              <div style={{ padding: '20px', backgroundColor: 'var(--bg-deep)', borderRadius: '15px' }}>
-                {showMediaCapture ? (
-                  <div style={{ marginBottom: '15px' }}>
-                    <MediaCapture 
-                      mode={showMediaCapture} 
-                      onCapture={(blob, type, transcription) => handleSendMessage(undefined, { blob, type, transcription })} 
-                    />
-                    <button onClick={() => setShowMediaCapture(null)} className="btn btn-ghost btn-sm" style={{ marginTop: '10px' }}>Cancelar</button>
-                  </div>
-                ) : (
-                  <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      <button type="button" onClick={() => setShowMediaCapture('audio')} title="Grabar Audio" className="btn btn-ghost btn-sm" style={{ padding: '8px', color: 'var(--primary)' }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                      </button>
-                      <button type="button" onClick={() => setShowMediaCapture('video')} title="Grabar Video" className="btn btn-ghost btn-sm" style={{ padding: '8px', color: 'var(--primary)' }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
-                      </button>
-                    </div>
-                    <input 
-                      className="form-input" 
-                      placeholder="Escribe un mensaje al equipo..." 
-                      value={message}
-                      onChange={e => setMessage(e.target.value)}
-                      style={{ flex: 1, backgroundColor: 'var(--bg-card)' }}
-                    />
-                    <button type="submit" className="btn btn-primary" disabled={isSending || !message.trim()}>
-                      {isSending ? '...' : 'Enviar'}
-                    </button>
-                  </form>
-                )}
-              </div>
-            </div>
+          {/* 1. BITÁCORA - CHAT UNIFICADO WHATSAPP */}
+          <div 
+            className="bitacora-tab-content"
+            style={{ 
+              display: activeTab === 'BITACORA' ? 'flex' : 'none', 
+              flexDirection: 'column', 
+              height: 'calc(100vh - 220px)', 
+              minHeight: '400px', 
+              overflow: 'hidden',
+              borderRadius: '0 0 16px 16px'
+            }}>
+            <ProjectChatUnified
+              project={project}
+              messages={chatMessages.map((m: any) => ({
+                ...m,
+                userName: m.user?.name || m.userName || 'Usuario',
+                userId: m.user?.id || m.userId
+              }))}
+              userId={Number(session?.user?.id)}
+              isOperatorView={false}
+              activeRecord={null}
+              backUrl="/admin/proyectos"
+              onSendMessage={handleChatUnifiedSend}
+              hideBack={true}
+            />
+          </div>
           
           {/* 2. GALERÍA UNIFICADA */}
           <div style={{ display: activeTab === 'GALLERY' ? 'block' : 'none' }}>
@@ -1921,7 +1867,9 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+      <>
+          <div className="project-main-grid">
+
         <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
           <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text)' }}>Fases de Trabajo</h3>
@@ -2338,10 +2286,38 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginTop: '2px' }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
               <span>{project.address || project.client?.address || 'Sin dirección'}</span>
             </div>
-            </div>
           </div>
         </div>
       </div>
+
+
+      {/* ═══════ ZONA DE PELIGRO ═══════ */}
+      <div style={{ marginTop: '50px', paddingTop: '30px', borderTop: '2px dashed rgba(239, 68, 68, 0.2)' }}>
+        <div className="card" style={{ border: '1px solid rgba(239, 68, 68, 0.3)', backgroundColor: 'rgba(239, 68, 68, 0.02)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ color: 'var(--danger)', margin: 0, fontSize: '1.2rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Zona de Peligro
+              </h3>
+              <p style={{ margin: '5px 0 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                Al eliminar este proyecto, se perderán permanentemente todos los mensajes, fotos, gastos e historial. Esta acción no se puede deshacer.
+              </p>
+            </div>
+            <button 
+              onClick={() => {
+                setShowDeleteModal(true)
+                setDeleteStep(1)
+                setDeleteConfirmText('')
+              }}
+              style={{ padding: '12px 24px', backgroundColor: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
+            >
+              Eliminar Proyecto
+            </button>
+          </div>
+        </div>
+      </div>
+      </>
 
       {/* MODAL PARA GASTOS */}
       {isExpenseModalOpen && (
@@ -2433,33 +2409,6 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
           </div>
         </div>
       )}
-
-      {/* ═══════ ZONA DE PELIGRO ═══════ */}
-      <div style={{ marginTop: '50px', paddingTop: '30px', borderTop: '2px dashed rgba(239, 68, 68, 0.2)' }}>
-        <div className="card" style={{ border: '1px solid rgba(239, 68, 68, 0.3)', backgroundColor: 'rgba(239, 68, 68, 0.02)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h3 style={{ color: 'var(--danger)', margin: 0, fontSize: '1.2rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                Zona de Peligro
-              </h3>
-              <p style={{ margin: '5px 0 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                Al eliminar este proyecto, se perderán permanentemente todos los mensajes, fotos, gastos e historial. Esta acción no se puede deshacer.
-              </p>
-            </div>
-            <button 
-              onClick={() => {
-                setShowDeleteModal(true)
-                setDeleteStep(1)
-                setDeleteConfirmText('')
-              }}
-              style={{ padding: '12px 24px', backgroundColor: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
-            >
-              Eliminar Proyecto
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Modal de Doble Verificación */}
       {showDeleteModal && (

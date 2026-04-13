@@ -4,9 +4,68 @@ import { generateProfessionalPDF, numberToSpanishWords } from '@/lib/pdf-generat
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { formatDateEcuador } from '@/lib/date-utils'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
-export default function QuoteDetailClient({ quote }: any) {
+export default function QuoteDetailClient({ quote, projects = [] }: any) {
   const { data: session } = useSession()
+  const router = useRouter()
+  const [sending, setSending] = useState(false)
+  
+  // Project Search State
+  const [projectSearch, setProjectSearch] = useState('')
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState<number | string>(quote.projectId || '')
+  const projectDropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(event.target as Node)) {
+        setShowProjectDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredProjects = useMemo(() => {
+    if (!projectSearch.trim()) return projects.slice(0, 10)
+    const terms = projectSearch.toLowerCase().split(/\s+/).filter(Boolean)
+    return projects.filter((p: any) => {
+      const targetText = `${p.title || ''} ${p.client?.name || ''} ${p.id}`.toLowerCase()
+      return terms.every(term => targetText.includes(term))
+    }).slice(0, 50)
+  }, [projectSearch, projects])
+
+  const selectedProjectTitle = useMemo(() => {
+    if (!selectedProjectId) return ''
+    const p = projects.find((proj: any) => proj.id === Number(selectedProjectId))
+    return p ? p.title : ''
+  }, [selectedProjectId, projects])
+
+  const handleSendToProject = async () => {
+    if (!selectedProjectId) return alert("Selecciona un proyecto primero")
+    
+    setSending(true)
+    try {
+      const res = await fetch(`/api/quotes/${quote.id}/send-to-project`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProjectId })
+      })
+
+      if (res.ok) {
+        alert("¡Cotización enviada a la bitácora del proyecto correctamente!")
+        router.refresh()
+      } else {
+        alert("Error al enviar al proyecto")
+      }
+    } catch (err) {
+      alert("Error de red")
+    } finally {
+      setSending(false)
+    }
+  }
   
   const handleDownloadPDF = () => {
     const clientInfo = {
@@ -164,6 +223,63 @@ export default function QuoteDetailClient({ quote }: any) {
         </div>
 
         <div style={{ display: 'grid', gap: '20px' }}>
+          <div className="card" style={{ borderLeft: '4px solid var(--secondary)' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Enviar a Bitácora
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '10px 0' }}>
+              Selecciona un proyecto para compartir formalmente esta cotización en su reporte diario.
+            </p>
+            
+            <div style={{ position: 'relative' }} ref={projectDropdownRef} className="mb-md">
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="🔍 Buscar proyecto..." 
+                  value={selectedProjectId ? selectedProjectTitle : projectSearch}
+                  onChange={e => {
+                    setProjectSearch(e.target.value)
+                    setShowProjectDropdown(true)
+                    if (selectedProjectId) setSelectedProjectId('')
+                  }}
+                  onFocus={() => setShowProjectDropdown(true)}
+                  style={{ borderColor: selectedProjectId ? 'var(--secondary)' : '' }}
+                />
+                
+                {showProjectDropdown && !selectedProjectId && (
+                  <div className="catalog-dropdown" style={{ zIndex: 100, position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', maxHeight: '200px', overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                    {filteredProjects.length > 0 ? (
+                      filteredProjects.map((p: any) => (
+                        <div 
+                          key={p.id} 
+                          onClick={() => {
+                            setSelectedProjectId(p.id)
+                            setShowProjectDropdown(false)
+                          }} 
+                          style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                        >
+                          <div style={{ fontWeight: '600', fontSize: '0.85rem' }}>{p.title}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{p.client?.name}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ padding: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>No hay resultados</div>
+                    )}
+                  </div>
+                )}
+            </div>
+
+            <button 
+              className="btn btn-secondary" 
+              style={{ width: '100%', justifyContent: 'center' }} 
+              disabled={!selectedProjectId || sending}
+              onClick={handleSendToProject}
+            >
+              {sending ? 'Enviando...' : 'COMPARTIR EN PROYECTO'}
+            </button>
+          </div>
+
           <div className="card">
             <h3>Gestión de Cotización</h3>
             <div style={{ marginTop: '20px', display: 'grid', gap: '10px' }}>
@@ -176,7 +292,7 @@ export default function QuoteDetailClient({ quote }: any) {
           <div className="card">
             <h3>Acciones Rápidas</h3>
             <div style={{ marginTop: '20px', display: 'grid', gap: '10px' }}>
-              <Link href={`/admin/cotizaciones/nuevo?from=${quote.id}`} className="btn btn-ghost" style={{ textDecoration: 'none', textAlign: 'center' }}>
+              <Link href={`/admin/cotizaciones/nuevo?from=${quote.id}`} className="btn btn-ghost" style={{ textDecoration: 'none', textAlign: 'center', width: '100%', justifyContent: 'center', padding: '10px' }}>
                 Duplicar Cotización
               </Link>
               <button className="btn btn-ghost" onClick={() => window.print()}>Imprimir Copia</button>

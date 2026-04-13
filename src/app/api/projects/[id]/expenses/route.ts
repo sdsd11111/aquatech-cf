@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { uploadToBunny } from '@/lib/bunny'
 import { getLocalNow, forceEcuadorTZ } from '@/lib/date-utils'
 import { isAdmin } from '@/lib/rbac'
+import { notifyProjectTeam } from '@/lib/push'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -43,16 +44,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { amount, description, date, createdAt, lat, lng, receiptPhoto, isNote } = await req.json()
     const expenseDate = new Date(forceEcuadorTZ(date || createdAt) || new Date())
 
+    // 🛡️ Deduplication Check: Prevent exactly same expense within 15 seconds
+    const possibleDuplicate = await prisma.expense.findFirst({
+      where: {
+        projectId,
+        userId,
+        amount: Number(amount),
+        description: description,
+        createdAt: {
+          gte: new Date(Date.now() - 15000)
+        }
+      }
+    })
+
+    if (possibleDuplicate) {
+      console.log('[API] Duplicate expense detected and ignored:', description)
+      return NextResponse.json(possibleDuplicate)
+    }
+
+
     let receiptUrl = null
-    if (receiptPhoto && typeof receiptPhoto === 'string' && receiptPhoto.startsWith('data:image')) {
-      try {
-        const base64Data = receiptPhoto.split(',')[1]
-        const buffer = Buffer.from(base64Data, 'base64')
-        const filename = `expense_${Date.now()}.jpg`
-        const folder = `projects/${id}/expenses`
-        receiptUrl = await uploadToBunny(buffer, filename, folder)
-      } catch (uploadError) {
-        console.error('Failed to upload expense receipt to Bunny:', uploadError)
+    if (receiptPhoto && typeof receiptPhoto === 'string') {
+      if (receiptPhoto.startsWith('data:image')) {
+        try {
+          const base64Data = receiptPhoto.split(',')[1]
+          const buffer = Buffer.from(base64Data, 'base64')
+          const filename = `expense_${Date.now()}.jpg`
+          const folder = `projects/${id}/expenses`
+          receiptUrl = await uploadToBunny(buffer, filename, folder)
+        } catch (uploadError) {
+          console.error('Failed to upload expense receipt to Bunny:', uploadError)
+        }
+      } else if (receiptPhoto.startsWith('http')) {
+        // Direct URL from client-side upload
+        receiptUrl = receiptPhoto
       }
     }
 
@@ -97,6 +122,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         createdAt: createdAt ? new Date(forceEcuadorTZ(createdAt)) : undefined,
       }
     })
+
+    // 🔔 Push Notification (fire-and-forget)
+    if (!isNote) {
+      notifyProjectTeam(
+        projectId, userId,
+        `💰 Gasto: $${Number(amount).toFixed(2)}`,
+        `${session.user.name}: ${description || 'Sin descripción'}`,
+        `/admin/operador/proyecto/${projectId}?view=records`,
+        `expense-${projectId}`
+      )
+    }
 
     return NextResponse.json(expense)
   } catch (error: any) {

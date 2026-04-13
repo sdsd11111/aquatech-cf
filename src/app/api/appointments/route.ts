@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
-import { formatTimeEcuador, forceEcuadorTZ } from '@/lib/date-utils'
+import { formatTimeEcuador, forceEcuadorTZ, formatDateEcuador } from '@/lib/date-utils'
 import { isAdmin as checkIsAdmin } from '@/lib/rbac'
+import { notifyUser } from '@/lib/push'
 
 export async function GET(request: Request) {
   try {
@@ -98,14 +99,26 @@ export async function POST(request: Request) {
     // NOTIFICACIÓN AUTOMÁTICA: Si hay un número de teléfono, enviar aviso de nueva tarea
     if (appointment.user?.phone) {
       const startTimeLocale = formatTimeEcuador(startTime);
+      const startDateLocale = formatDateEcuador(startTime);
+      const descrText = description ? `\n📝 *Nota / Instrucción:*\n${description}` : '';
       
-      const message = `*Notificación Aquatech*\n\nHola ${appointment.user.name}, tienes una *nueva tarea* asignada para hoy/próximamente:\n📌 *${title}*\n⏰ Hora: ${startTimeLocale}\n\nConsulta más detalles en tu perfil.`;
+      const message = `*Notificación Aquatech*\n\nHola ${appointment.user.name}, tienes una *nueva tarea* asignada:\n📌 *${title}*\n📅 Fecha: ${startDateLocale}\n⏰ Hora: ${startTimeLocale}${descrText}\n\nConsulta más detalles en tu perfil.`;
       
       // Enviamos de forma asíncrona para no bloquear la respuesta de la API
       sendWhatsAppMessage(appointment.user.phone, message).catch(err => {
         console.error('Error enviando notificación WA de nueva tarea:', err);
       });
     }
+
+    // 🔔 Push Notification to the assigned operator
+    const startLocale = formatTimeEcuador(startTime)
+    notifyUser(
+      Number(userId),
+      '📌 Nueva Tarea Asignada',
+      `${title} — ${startLocale}`,
+      `/admin/operador`,
+      `task-${appointment.id}`
+    )
 
     return NextResponse.json(appointment)
   } catch (error) {

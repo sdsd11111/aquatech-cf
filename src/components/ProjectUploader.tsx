@@ -69,57 +69,64 @@ export default function ProjectUploader({
     const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
     
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i]
-        const isImage = file.type.startsWith('image/')
+      // Process files in batches to prevent memory crashes on mobile
+      const batchSize = 3;
+      const filesArray = Array.from(selectedFiles);
+      
+      for (let i = 0; i < filesArray.length; i += batchSize) {
+        const batch = filesArray.slice(i, i + batchSize);
+        
+        await Promise.all(batch.map(async (file) => {
+          const isImage = file.type.startsWith('image/')
 
-        if (!isOnline) {
-          // Offline Mode: Convert to base64 locally
-          let base64: string
-          if (isImage) {
-            base64 = await optimizedCompress(file)
-          } else {
-            const reader = new FileReader()
-            base64 = await new Promise((resolve, reject) => {
-              reader.onload = () => resolve(reader.result as string)
-              reader.onerror = reject
-              reader.readAsDataURL(file)
-            })
-          }
-
-          const localFile = {
-            url: base64, // Local preview/base64 for outbox
-            filename: file.name,
-            mimeType: file.type,
-            type: (isImage ? 'IMAGE' : (file.type.startsWith('video/') ? 'VIDEO' : 'DOCUMENT')) as 'IMAGE' | 'VIDEO' | 'DOCUMENT'
-          }
-          
-          onAddFile(localFile)
-          continue
-        }
-
-        // Online Mode: Normal upload
-        try {
-          const { uploadToBunnyClientSide } = await import('@/lib/storage-client')
-          let uploadFile: File | Blob = file
-
-          if (isImage) {
-            // Compress before sending to avoid memory/bandwidth issues
-            try {
-              const compressedB64 = await optimizedCompress(file)
-              const resB64 = await fetch(compressedB64)
-              uploadFile = await resB64.blob()
-            } catch (err) {
-              console.error('Compression failed, falling back to original', err)
+          if (!isOnline) {
+            // Offline Mode: Convert to base64 locally
+            let base64: string
+            if (isImage) {
+              base64 = await optimizedCompress(file)
+            } else {
+              const reader = new FileReader()
+              base64 = await new Promise((resolve, reject) => {
+                reader.onload = () => resolve(reader.result as string)
+                reader.onerror = reject
+                reader.readAsDataURL(file)
+              })
             }
+
+            const localFile = {
+              url: base64, // Local preview/base64 for outbox
+              filename: file.name,
+              mimeType: file.type,
+              type: (isImage ? 'IMAGE' : (file.type.startsWith('video/') ? 'VIDEO' : 'DOCUMENT')) as 'IMAGE' | 'VIDEO' | 'DOCUMENT'
+            }
+            
+            onAddFile(localFile)
+            return
           }
 
-          const data = await uploadToBunnyClientSide(uploadFile, file.name, 'projects')
-          onAddFile(data)
-        } catch (err) {
-          console.error('Project upload failed:', err)
-          throw err
-        }
+          // Online Mode: Normal upload
+          try {
+            const { uploadToBunnyClientSide } = await import('@/lib/storage-client')
+            let uploadFile: File | Blob = file
+
+            if (isImage) {
+              // Compress before sending to avoid memory/bandwidth issues
+              try {
+                const compressedB64 = await optimizedCompress(file)
+                const resB64 = await fetch(compressedB64)
+                uploadFile = await resB64.blob()
+              } catch (err) {
+                console.error('Compression failed, falling back to original', err)
+              }
+            }
+
+            const data = await uploadToBunnyClientSide(uploadFile, file.name, 'projects')
+            onAddFile(data)
+          } catch (err) {
+            console.error('Project upload failed:', err)
+            throw err
+          }
+        }));
       }
     } catch (error) {
       console.error('Error handling files:', error)

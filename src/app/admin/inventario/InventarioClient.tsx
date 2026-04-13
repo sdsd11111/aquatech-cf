@@ -68,10 +68,10 @@ export default function InventarioClient({ initialMaterials }: { initialMaterial
 
   const categories = Array.from(new Set(materials.map(m => m.category))).filter(Boolean)
 
+  const searchTerms = search.toLowerCase().split(/\s+/).filter(Boolean)
   const filtered = materials.filter(m => {
-    const matchesSearch = 
-      m.name.toLowerCase().includes(search.toLowerCase()) || 
-      m.code.toLowerCase().includes(search.toLowerCase())
+    const targetText = `${m.name || ''} ${m.code || ''}`.toLowerCase()
+    const matchesSearch = searchTerms.length === 0 || searchTerms.every(term => targetText.includes(term))
     const matchesCategory = categoryFilter === 'ALL' || m.category === categoryFilter
     return matchesSearch && matchesCategory
   })

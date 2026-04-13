@@ -19,7 +19,7 @@ export default function ProyectosPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null)
 
   const userRole = (session?.user as any)?.role
-  const isAuthorized = userRole && (userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADMINISTRADORA')
+  const isAuthorized = userRole && (userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADMINISTRADORA' || userRole === 'OPERATOR' || userRole === 'OPERADOR')
 
   useEffect(() => {
     if (status === 'authenticated' && !isAuthorized) {

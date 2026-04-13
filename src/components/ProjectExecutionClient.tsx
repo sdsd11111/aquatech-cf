@@ -18,6 +18,7 @@ import { compressImage as optimizedCompress } from '@/lib/image-optimization'
 
 import Link from 'next/link'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
+import ProjectChatUnified from './chat/ProjectChatUnified'
 
 export default function ProjectExecutionClient({ 
   project, 
@@ -55,6 +56,8 @@ export default function ProjectExecutionClient({
   useEffect(() => {
     setMounted(true)
   }, [])
+
+
   // --- FULL-SYNC FETCH: always gets ALL messages from server ---
   const fetchAllMessages = async (): Promise<any[]> => {
     try {
@@ -140,12 +143,31 @@ export default function ProjectExecutionClient({
     }
   }, [initialChat])
 
+  const pendingItems = useLiveQuery(() => db.outbox.where('projectId').equals(project.id).toArray(), [project.id]) || []
+
+  const pendingExpenses = useMemo(() => {
+    return pendingItems
+      .filter((item: any) => item.type === 'EXPENSE')
+      .map((item: any) => ({
+        id: `pending-exp-${item.id}`,
+        amount: item.payload.amount,
+        description: item.payload.description,
+        date: new Date(item.timestamp).toISOString(),
+        isPending: true
+      }))
+  }, [pendingItems])
+
+  const allExpenses = useMemo(() => {
+    return [...expenses, ...pendingExpenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [expenses, pendingExpenses])
+
+
   // Calculate my total real expenses (not notes)
   const myTotalSpent = useMemo(() => {
-    return expenses
+    return (allExpenses || [])
       .filter((e: any) => !e.isNote)
-      .reduce((acc: number, curr: any) => acc + Number(curr.amount), 0)
-  }, [expenses])
+      .reduce((acc: number, curr: any) => acc + Number(curr.amount || 0), 0)
+  }, [allExpenses])
 
   // --- EXPENSE EDIT/DELETE STATE ---
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
@@ -194,7 +216,7 @@ export default function ProjectExecutionClient({
     }
   }, [searchParams])
 
-  const pendingItems = useLiveQuery(() => db.outbox.where('projectId').equals(project.id).toArray(), [project.id]) || []
+
   const [isOnline, setIsOnline] = useState(true)
 
   const syncOutbox = async () => {
@@ -366,9 +388,12 @@ export default function ProjectExecutionClient({
       }
 
       const isEnding = activeRecord && Number(activeRecord.projectId) === Number(project.id)
+      
+      // If we are offline and trying to END, but we don't have an activeRecord.id 
+      // (likely because the START was also offline), we send a flag.
       const payload = isEnding 
         ? { recordId: activeRecord.id, projectId: project.id, location }
-        : { projectId: project.id, location }
+        : { projectId: project.id, location, findLatestIfEnding: true }
       const type = isEnding ? 'DAY_END' : 'DAY_START'
 
       // Always try local save first if offline, or if online but flaky
@@ -444,17 +469,40 @@ export default function ProjectExecutionClient({
       }
 
       let processedPhoto = expensePhoto
-      // Note: expensePhoto is handled in the input onChange now with optimizedCompress
+      if (processedPhoto && processedPhoto.startsWith('data:')) {
+        try {
+          const { uploadToBunnyClientSide } = await import('@/lib/storage-client')
+          const resB64 = await fetch(processedPhoto)
+          const blob = await resB64.blob()
+          const uploadResult = await uploadToBunnyClientSide(blob, `expense_${Date.now()}.jpg`, `projects/${project.id}/expenses`)
+          processedPhoto = uploadResult.url
+        } catch (uploadError) {
+          console.error('Failed to upload expense photo directly:', uploadError)
+        }
+      }
 
       const payload = { 
         amount: Number(amount), 
         description, 
         date: new Date().toISOString(),
         isNote,
-        receiptPhoto: processedPhoto // Compressed Base64
+        receiptPhoto: processedPhoto
       }
 
       if (!navigator.onLine) {
+        // Prevent duplicate offline entries if they click very fast
+        const alreadyExists = await db.outbox
+          .where('type').equals('EXPENSE')
+          .filter(i => i.projectId === project.id && i.payload.description === description && i.payload.amount === Number(amount))
+          .first()
+        
+        if (alreadyExists && (Date.now() - alreadyExists.timestamp < 10000)) {
+          console.log('Duplicate expense preventer triggered')
+          setLoading(false)
+          setExpenseForm(false)
+          return
+        }
+
         await db.outbox.add({
           type: 'EXPENSE',
           projectId: project.id,
@@ -464,6 +512,7 @@ export default function ProjectExecutionClient({
           lng: location?.lng,
           status: 'pending'
         })
+        alert("✅ Gasto guardado localmente. Se sincronizará automáticamente cuando tengas internet.")
         setExpenseForm(false)
         removeExpenseDraft()
         setLoading(false)
@@ -558,7 +607,7 @@ export default function ProjectExecutionClient({
     }
   }
 
-  const handleSendMessage = async (e: React.FormEvent, customMsg?: string, customPhase?: number, mediaFile?: File) => {
+  const handleSendMessage = async (e: React.FormEvent, customMsg?: string, customPhase?: number, mediaFile?: File, extraData?: any, forcedType?: string) => {
     if (e) e.preventDefault()
     const msgToSend = customMsg || message
     const phaseIdToSend = customPhase !== undefined ? customPhase : activePhase
@@ -597,31 +646,41 @@ export default function ProjectExecutionClient({
 
       let mediaData = null
       if (mediaFile) {
-        let base64: string
-        if (mediaFile.type.startsWith('image/')) {
-          base64 = await optimizedCompress(mediaFile)
-        } else {
-          // For non-images (videos/docs), we still need the data URL, but keep it minimal
-          // Note: Videos might still spike memory, but the user specifically mentioned images
-          base64 = await new Promise((resolve) => {
-            const reader = new FileReader()
-            reader.onloadend = () => resolve(reader.result as string)
-            reader.readAsDataURL(mediaFile)
-          })
-        }
+        try {
+          const { uploadToBunnyClientSide } = await import('@/lib/storage-client')
+          let uploadFile: File | Blob = mediaFile
 
-        mediaData = {
-          base64,
-          filename: mediaFile.name,
-          mimeType: mediaFile.type
+          if (mediaFile.type.startsWith('image/')) {
+            const compressedB64 = await optimizedCompress(mediaFile)
+            const resB64 = await fetch(compressedB64)
+            uploadFile = await resB64.blob()
+          }
+
+          const uploadResult = await uploadToBunnyClientSide(uploadFile, mediaFile.name, `projects/${project.id}/chat`)
+          mediaData = {
+            url: uploadResult.url,
+            filename: uploadResult.filename,
+            mimeType: uploadResult.mimeType
+          }
+        } catch (uploadError) {
+          console.error('Failed to upload media directly:', uploadError)
+          // Fallback to legacy base64 if direct upload fails and we are online?
+          // Actually better to throw or let it fail gracefully.
         }
       }
 
       const payload = { 
         phaseId: phaseIdToSend, 
         content: msgToSend, 
-        type: mediaFile ? (mediaFile.type.startsWith('image') ? 'IMAGE' : 'VIDEO') : (customMsg ? 'NOTE' : 'TEXT'),
-        media: mediaData
+        type: forcedType || (extraData?.amount ? 'EXPENSE_LOG' : (
+          mediaFile ? (
+            mediaFile.type.startsWith('image/') ? 'IMAGE' : 
+            mediaFile.type.startsWith('audio/') ? 'AUDIO' : 
+            mediaFile.type.startsWith('video/') ? 'VIDEO' : 'DOCUMENT'
+          ) : 'TEXT'
+        )),
+        media: mediaData,
+        extraData: extraData
       }
 
       if (!navigator.onLine) {
@@ -650,16 +709,22 @@ export default function ProjectExecutionClient({
         
         if (res.ok) {
           const createdMsg = await res.json()
-          setLiveChat((prev: any[]) => {
-            const exists = prev.some((m: any) => m.id === createdMsg.id)
-            if (exists) return prev
-            return [...prev, {
+        
+          // Update live chat and expenses in one go
+          setLiveChat((prev: any[]) => [
+            ...prev, 
+            {
               ...createdMsg,
               isMe: true,
               userName: session?.user?.name || 'Yo',
               userBranch: (session?.user as any)?.branch || null
-            }].sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-          })
+            }
+          ])
+          
+          // If it was an expense, trigger a refresh to update total spent
+          if (payload.type === 'EXPENSE_LOG') {
+            router.refresh()
+          }
         }
 
         if (!customMsg) removeMessageDraft()
@@ -847,17 +912,7 @@ export default function ProjectExecutionClient({
     }
   }, [filteredChat.length, activeTab, project.id])
 
-  const pendingExpenses = pendingItems
-    .filter((item: any) => item.type === 'EXPENSE')
-    .map((item: any) => ({
-      id: `pending-exp-${item.id}`,
-      amount: item.payload.amount,
-      description: item.payload.description,
-      date: new Date(item.timestamp).toISOString(),
-      isPending: true
-    }))
 
-  const allExpenses = [...expenses, ...pendingExpenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   
   const pendingDayAction = pendingItems.find((item: any) => item.type === 'DAY_START' || item.type === 'DAY_END')
 
@@ -1009,135 +1064,53 @@ export default function ProjectExecutionClient({
   }
 
   return (
-    <div style={{ padding: isSmallScreen ? '5px 10px 0 10px' : '0', minHeight: isSmallScreen ? 'calc(100vh - 128px)' : 'auto', display: 'flex', flexDirection: 'column' }}>
+    <div className="project-execution-container" style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      minHeight: '100vh',
+      width: '100%',
+      backgroundColor: 'var(--bg-deep)',
+      position: 'relative',
+    }}>
+
       {/* Project Header */}
-      <div style={{ padding: isSmallScreen ? '10px 10px 0 10px' : '0', marginBottom: isSmallScreen ? '10px' : '20px' }}>
-        <Link href={panelBase} className="btn btn-ghost btn-sm" style={{ padding: 0, color: 'var(--primary)', marginBottom: isSmallScreen ? '5px' : '10px', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: isSmallScreen ? '0.8rem' : '0.9rem' }}>
-          &larr; {isSmallScreen ? 'Volver' : 'Volver a Mis Proyectos'}
-        </Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: '1', minWidth: '150px' }}>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '5px', 
-              alignSelf: 'flex-start', 
+      <div style={{ 
+        padding: '12px 16px', 
+        borderBottom: '1px solid rgba(255,255,255,0.05)', 
+        backgroundColor: 'rgba(0,0,0,0.4)', 
+        backdropFilter: 'blur(20px)',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <span style={{ 
               fontSize: '0.7rem', 
               color: !mounted ? 'var(--text-muted)' : (isOnline ? 'var(--success)' : 'var(--warning)'), 
               backgroundColor: 'var(--bg-deep)', 
               padding: '2px 8px', 
               borderRadius: '12px', 
               border: '1px solid currentColor', 
-              whiteSpace: 'nowrap' 
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
             }}>
-               <div style={{ 
-                 width: '6px', 
-                 height: '6px', 
-                 borderRadius: '50%', 
-                 backgroundColor: 'currentColor',
-                 boxShadow: mounted && isOnline ? '0 0 8px var(--success)' : 'none'
-               }}></div>
-               {mounted ? (
-                 <>
-                   {isOnline ? 'EN LÍNEA' : 'MODO OFFLINE'}
-                   {pendingItems.length > 0 && (
-                      <span style={{ marginLeft: '8px', backgroundColor: 'var(--primary)', color: 'white', padding: '1px 6px', borderRadius: '10px', fontSize: '0.65rem', fontWeight: 'bold' }}>
-                        {pendingItems.length} pendientes
-                      </span>
-                   )}
-                 </>
-               ) : 'COMPROBANDO...'}
-            </div>
-            
-            <h1 style={{ fontSize: isSmallScreen ? '1.4rem' : '1.8rem', margin: 0, color: 'var(--text)', fontWeight: 'bold', lineHeight: 1.2, wordBreak: 'break-word' }}>{project.title}</h1>
-            
-            {/* NEW: Collapsible Project Info Accordion */}
-            <div className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--border-color)', margin: '5px 0' }}>
-              <details style={{ width: '100%' }}>
-                <summary style={{ 
-                  padding: '10px 15px', 
-                  cursor: 'pointer', 
-                  backgroundColor: 'var(--bg-deep)', 
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  listStyle: 'none'
-                }}>
-                  <span style={{ fontSize: '0.9rem', color: 'var(--primary)' }}>📋 Ficha del Proyecto (Info)</span>
-                  <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▼</span>
-                </summary>
-                <div style={{ padding: '15px', display: 'grid', gridTemplateColumns: isSmallScreen ? '1fr' : '1fr 1fr', gap: '15px' }}>
-                  <div>
-                    <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Cliente</h4>
-                    <p style={{ margin: 0, fontWeight: 'bold' }}>{clientName}</p>
-                  </div>
-                  <div>
-                    <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Dirección</h4>
-                    <p style={{ margin: 0 }}>{projectAddress}, {projectCity}</p>
-                  </div>
-                  <div style={{ gridColumn: isSmallScreen ? 'auto' : '1 / -1' }}>
-                    <h4 style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>Especificaciones</h4>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {project.depth && <span style={{ backgroundColor: 'var(--bg-deep)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>Prof: {project.depth}m</span>}
-                      {project.diameter && <span style={{ backgroundColor: 'var(--bg-deep)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>Diám: {project.diameter}"</span>}
-                      {project.elevation && <span style={{ backgroundColor: 'var(--bg-deep)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem' }}>Elev: {project.elevation}m</span>}
-                    </div>
-                  </div>
-                  
-                  {/* Download PDF Buttons in the info card */}
-                  <div style={{ marginTop: '10px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    <button 
-                      onClick={() => generateFichaPDF()}
-                      className="btn btn-ghost" 
-                      style={{ fontSize: '0.75rem', border: '1px solid var(--primary)', color: 'var(--primary)', flex: 1 }}
-                    >
-                      📄 Ficha del Proyecto
-                    </button>
-                  </div>
-                </div>
-              </details>
-            </div>
+              <div style={{ 
+                width: '6px', 
+                height: '6px', 
+                borderRadius: '50%', 
+                backgroundColor: 'currentColor'
+              }}></div>
+              {mounted ? (isOnline ? 'EN LÍNEA' : 'MODO OFFLINE') : '...'}
+            </span>
           </div>
-          <span style={{ 
-            backgroundColor: project.status === 'ACTIVO' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', 
-            color: project.status === 'ACTIVO' ? 'var(--success)' : 'var(--warning)', 
-            padding: '4px 10px', 
-            borderRadius: '20px', 
-            fontSize: '0.75rem', 
-            fontWeight: 'bold',
-            display: 'inline-block',
-            marginTop: '10px'
-          }}>
-            {project.status === 'ACTIVO' ? 'Activo' : 'Pendiente'}
-          </span>
         </div>
-        
-        <div style={{ 
-          display: 'flex', 
-          gap: isSmallScreen ? '8px' : '15px', 
-          marginTop: isSmallScreen ? '8px' : '15px', 
-          color: 'var(--text-muted)', 
-          fontSize: isSmallScreen ? '0.75rem' : '0.9rem', 
-          flexWrap: 'wrap',
-          alignItems: 'center'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '100%', overflow: 'hidden' }}>
-            <svg width={isSmallScreen ? "12" : "14"} height={isSmallScreen ? "12" : "14"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{clientName}</span>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{project.title}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{clientName}</span>
           </div>
-          {(projectAddress) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '100%', overflow: 'hidden' }}>
-              <svg width={isSmallScreen ? "12" : "14"} height={isSmallScreen ? "12" : "14"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{projectAddress} {projectCity ? `, ${projectCity}` : ''}</span>
-            </div>
-          )}
-          {isSmallScreen && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '8px', borderLeft: '1px solid var(--border)' }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              {project.team.length}
-            </div>
-          )}
         </div>
       </div>
 
@@ -1151,11 +1124,12 @@ export default function ProjectExecutionClient({
           paddingRight: isSmallScreen ? '10px' : '0',
           borderBottom: '1px solid var(--border-color)',
           overflowX: 'auto',
-          scrollbarWidth: 'none'
+          scrollbarWidth: 'none',
+          flexShrink: 0
       }}>
         {[
           { id: 'records', label: 'Registros', activeColor: 'var(--primary)', bgColor: 'rgba(0, 112, 192, 0.2)', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, gradient: 'linear-gradient(135deg, #0070c0, #38bdf8)' },
-          { id: 'chat', label: 'Bitácora', activeColor: 'var(--warning)', bgColor: 'rgba(245, 158, 11, 0.2)', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>, gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)' }
+          { id: 'chat', label: 'Chat', activeColor: '#25D366', bgColor: 'rgba(37, 211, 102, 0.2)', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>, gradient: 'linear-gradient(135deg, #128C7E, #25D366)' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -1192,8 +1166,20 @@ export default function ProjectExecutionClient({
       </div>
 
       <div className="tab-content" style={{ flex: isSmallScreen ? 1 : 'none', display: 'flex', flexDirection: 'column', overflow: isSmallScreen ? 'hidden' : 'visible' }}>
-        {/* 1. REGISTROS */}
-        <div style={{ display: activeTab === 'records' ? 'grid' : 'none', gap: '20px' }}>
+        {/* Main Content Area */}
+        <div style={{ 
+          flex: 1, 
+          padding: activeTab === 'chat' ? '0' : '20px', 
+          overflowY: activeTab === 'chat' ? 'hidden' : 'auto', // Fix: prevent infinite scroll in chat
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          {/* 1. REGISTROS */}
+          <div style={{ 
+            display: activeTab === 'records' ? 'grid' : 'none', 
+            gap: '20px',
+            paddingBottom: isSmallScreen ? '100px' : '0' 
+          }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: '20px' }}>
               <div className="card" style={{ minWidth: 0 }}>
                 <h3 style={{ fontSize: '1.2rem', marginBottom: '15px' }}>Registro de Jornada</h3>
@@ -1558,45 +1544,8 @@ export default function ProjectExecutionClient({
               </div>
             </div>
 
-            <div className="card" style={{ minWidth: 0 }}>
-              <h3 style={{ fontSize: '1.2rem', marginBottom: '15px' }}>Avances de Fase & Notas</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div className="form-group">
-                  <label className="form-label">Fase Actual</label>
-                  <select 
-                    className="form-input" 
-                    value={notePhase ?? ''} 
-                    onChange={e => setNotePhase(e.target.value === '' ? null : Number(e.target.value))}
-                    style={{ maxWidth: '100%', textOverflow: 'ellipsis' }}
-                  >
-                    <option value="">General (Sin Fase)</option>
-                    {project.phases.map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title} ({p.status})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Nota de Trabajo</label>
-                  <textarea 
-                    className="form-input" 
-                    rows={3} 
-                    placeholder="Ej: Se terminó la cimentación..."
-                    value={note}
-                    onChange={e => setNote(e.target.value)}
-                    style={{ resize: 'none' }}
-                  />
-                </div>
-                <button 
-                  className="btn btn-primary" 
-                  onClick={() => handleSendMessage(null as any, note, notePhase as number)}
-                  disabled={loading || !note.trim()}
-                >
-                  Guardar Nota de Avance
-                </button>
-              </div>
-            </div>
+            {/* Legacy Phase Advances Removed - Now handled in Chat */}
+
 
             <div className="card" style={{ minWidth: 0 }}>
               <ProjectUploader 
@@ -1606,359 +1555,76 @@ export default function ProjectExecutionClient({
               />
             </div>
           </div>
-        </div>
-
-        {/* 2. BITÁCORA / CHAT */}
-        <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flexDirection: 'column', flex: 1 }}>
-          <div className="chat-container" style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            height: isSmallScreen ? 'calc(100svh - 220px)' : 'calc(100vh - 280px)', 
-            minHeight: '400px',
-            backgroundColor: 'var(--bg-card)', 
-            borderRadius: isSmallScreen ? '0' : '12px', 
-            overflow: 'hidden', 
-            border: isSmallScreen ? 'none' : '1px solid var(--border)',
-            margin: isSmallScreen ? '0 -10px' : '0' 
-          }}>
-            {!isSmallScreen && (
-              <div style={{ padding: '10px 15px', backgroundColor: 'var(--bg-deep)', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ display: 'flex', marginLeft: '5px' }}>
-                        {project.team.map((t: any, idx: number) => (
-                            <div key={t.id} style={{ 
-                                width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'var(--primary)', 
-                                color: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                fontSize: '0.65rem', fontWeight: 'bold', border: '2px solid var(--bg-deep)',
-                                marginLeft: idx === 0 ? 0 : '-8px', zIndex: project.team.length - idx
-                            }} title={t.name}>
-                                {t.name.charAt(0)}
-                            </div>
-                        ))}
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{project.team.length} participantes</span>
-                 </div>
-                 <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold' }}>EN LÍNEA</div>
-              </div>
-            )}
-
-            <div style={{ 
-              padding: isSmallScreen ? '8px' : '12px', 
-              borderBottom: '1px solid var(--border-color)', 
-              backgroundColor: 'var(--bg-deep)', 
-              overflowX: 'auto', 
-              display: 'flex', 
-              gap: '8px',
-              scrollbarWidth: 'none'
-            }}>
-              <button 
-                onClick={() => setActivePhase(null)}
-                style={{ 
-                  whiteSpace: 'nowrap',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minWidth: isSmallScreen ? '60px' : '90px',
-                  padding: isSmallScreen ? '6px 4px' : '8px 12px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: activePhase === null ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                  color: activePhase === null ? 'var(--bg-deep)' : 'var(--text-muted)',
-                  transition: 'all 0.2s',
-                  position: 'relative'
-                }}
-              >
-                <span style={{ fontSize: isSmallScreen ? '0.7rem' : '0.8rem', fontWeight: 'bold' }}>GENERAL</span>
-              </button>
-
-              {project.phases.map((phase: any, idx: number) => {
-                const isPreviousCompleted = idx === 0 || project.phases[idx - 1].status === 'COMPLETADA'
-                const isLocked = false; // fases siempre desbloqueadas
-                const isActive = activePhase === phase.id
-                const isCompleted = phase.status === 'COMPLETADA'
-                
-                return (
-                  <button 
-                    key={phase.id} 
-                    onClick={() => setActivePhase(phase.id)}
-                    style={{ 
-                      whiteSpace: 'nowrap',
-                      opacity: isLocked ? 0.4 : 1,
-                      cursor: isLocked ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: isSmallScreen ? '60px' : '100px',
-                      padding: isSmallScreen ? '6px 4px' : '8px 12px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      backgroundColor: isActive ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-                      color: isActive ? 'var(--bg-deep)' : 'var(--text-muted)',
-                      transition: 'all 0.2s',
-                      position: 'relative'
-                    }}
-                  >
-                    <span style={{ fontSize: isSmallScreen ? '0.7rem' : '0.8rem', fontWeight: 'bold' }}>FASE {idx + 1}</span>
-                    {isCompleted && <div style={{ position: 'absolute', top: '-4px', right: '-4px', backgroundColor: 'var(--success)', borderRadius: '50%', width: '12px', height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><path d="M20 6L9 17l-5-5"/></svg></div>}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div style={{ padding: isSmallScreen ? '6px 10px' : '8px 15px', backgroundColor: 'var(--bg-deep)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', gap: '4px', overflowX: 'auto' }}>
-                {(['all', 'media', 'notes', 'text'] as const).map(f => (
-                  <button key={f} onClick={() => setChatFilter(f)} className={`btn btn-sm ${chatFilter === f ? 'btn-primary' : 'btn-ghost'}`} style={{ fontSize: isSmallScreen ? '0.65rem' : '0.7rem', padding: isSmallScreen ? '4px 6px' : '4px 10px', whiteSpace: 'nowrap' }}>
-                    {f === 'all' ? 'Todos' : f === 'media' ? (isSmallScreen ? '📷' : '📷 Multimedia') : f === 'notes' ? (isSmallScreen ? '📝' : '📝 Notas') : (isSmallScreen ? '💬' : '💬 Texto')}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button 
-                  onClick={handleManualSync}
-                  className={`btn btn-sm ${isSyncing ? 'btn-disabled' : 'btn-ghost'}`}
-                  disabled={isSyncing}
-                  style={{ 
-                    fontSize: isSmallScreen ? '0.65rem' : '0.7rem', 
-                    padding: '4px 8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    color: 'var(--primary)',
-                    opacity: isSyncing ? 0.5 : 1
-                  }}
-                >
-                  <svg 
-                    width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                    style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }}
-                  >
-                    <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                  </svg>
-                  {isSyncing ? 'Sincronizando...' : 'Actualizar'}
-                </button>
-              </div>
-
-              {activePhase !== null && (
-                project.phases.find((p: any) => p.id === activePhase)?.status === 'COMPLETADA' ? (
-                    <span style={{ color: 'var(--success)', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
-                        Fase Finalizada
-                    </span>
-                ) : (
-                    <button className="btn btn-sm btn-ghost" style={{ color: 'var(--warning)', borderColor: 'var(--warning)', fontSize: '0.75rem' }} onClick={() => handleCompletePhase(activePhase as number)} disabled={loading}>Finalizar Fase √</button>
-                )
-              )}
-            </div>
-
-            <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-              <div 
-                ref={chatContainerRef}
-                onScroll={(e) => {
-                  const target = e.currentTarget;
-                  const isAtBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 50;
-                  if (isAtBottom) setHasNewMessages(false);
-                }}
-                style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain', minHeight: 0, paddingTop: '12px', paddingLeft: '12px', paddingRight: '12px', paddingBottom: isSmallScreen ? '80px' : '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}
-              >
-                {filteredChat.length === 0 ? (
-                <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.5, marginBottom: '10px' }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  <p>No hay mensajes en esta fase.<br/>Envía el primer mensaje o evidencia.</p>
-                </div>
-              ) : (
-                filteredChat.map((msg: any) => (
-                  <div key={msg.id} className="chat-message" style={{ alignSelf: msg.isMe ? 'flex-end' : 'flex-start', maxWidth: isSmallScreen ? '85%' : '70%', display: 'flex', flexDirection: 'column', marginTop: '8px' }}>
-                    <span style={{ fontSize: '0.7rem', color: msg.isMe ? 'var(--text-muted)' : 'var(--primary)', fontWeight: 'bold', marginBottom: '2px', marginLeft: msg.isMe ? '0' : '8px', marginRight: msg.isMe ? '8px' : '0', alignSelf: msg.isMe ? 'flex-end' : 'flex-start' }}>
-                      {msg.isMe ? 'Yo' : msg.userName}
-                      {!msg.isMe && msg.userBranch && <span style={{ fontWeight: '500', color: 'var(--info)', marginLeft: '6px', fontSize: '0.65rem' }}>📍{msg.userBranch}</span>}
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', flexDirection: msg.isMe ? 'row' : 'row-reverse' }}>
-                      {msg.isMe && (
-                        <button
-                          onClick={() => setWaForwardMsg(msg)}
-                          title="Reenviar por WhatsApp"
-                          style={{ background: '#25D366', border: 'none', borderRadius: '50%', width: isSmallScreen ? '24px' : '28px', height: isSmallScreen ? '24px' : '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 1px 4px rgba(37,211,102,0.3)', transition: 'transform 0.15s' }}
-                          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
-                          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                        >
-                          <svg width={isSmallScreen ? "12" : "14"} height={isSmallScreen ? "12" : "14"} viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                        </button>
-                      )}
-                      <div style={{ backgroundColor: msg.type === 'NOTE' ? 'var(--bg-deep)' : (msg.isMe ? 'var(--primary)' : 'var(--bg-surface)'), color: msg.isMe && msg.type !== 'NOTE' ? 'var(--bg-deep)' : 'var(--text)', padding: isSmallScreen ? '8px 12px' : '10px 15px', borderRadius: '16px', fontSize: isSmallScreen ? '0.8rem' : '0.875rem', border: msg.type === 'NOTE' ? '1px solid var(--warning)' : 'none', borderBottomRightRadius: msg.isMe ? '4px' : '12px', borderBottomLeftRadius: msg.isMe ? '12px' : '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.1)', wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }}>
-                        {msg.type === 'NOTE' && <div style={{ fontSize: '0.7rem', color: 'var(--warning)', fontWeight: 'bold', marginBottom: '4px', textTransform: 'uppercase' }}>Nota de Avance</div>}
-                        {msg.media && msg.media.length > 0 && (
-                            <div style={{ marginBottom: '8px', borderRadius: '12px', overflow: 'hidden', position: 'relative', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                {msg.media[0].mimeType.startsWith('image') ? (
-                                  <div style={{ position: 'relative' }}>
-                                    <img src={msg.media[0].url} alt="Evidencia" style={{ width: '100%', maxHeight: isSmallScreen ? '200px' : '400px', objectFit: 'contain', display: 'block' }} />
-                                    <button 
-                                      onClick={() => handleDownload(msg.media[0].url, msg.media[0].filename)}
-                                      style={{ position: 'absolute', bottom: '8px', right: '8px', padding: '6px', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '50%', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                    </button>
-                                  </div>
-                                ) : msg.media[0].mimeType.startsWith('audio') ? (
-                                  <div style={{ padding: '15px', backgroundColor: 'var(--bg-deep)' }}>
-                                    <audio src={msg.media[0].url} controls style={{ width: '100%', height: '40px' }} />
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                                      <span>Audio compartido</span>
-                                      <button onClick={() => handleDownload(msg.media[0].url, msg.media[0].filename)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.65rem' }}>Descargar</button>
-                                    </div>
-                                  </div>
-                                ) : msg.media[0].mimeType.startsWith('video') ? (
-                                  <video src={msg.media[0].url} controls style={{ width: '100%', maxHeight: isSmallScreen ? '200px' : '400px' }} />
-                                ) : (
-                                  <div style={{ padding: '15px', backgroundColor: 'var(--bg-deep)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{msg.media[0].filename}</div>
-                                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Documento {(msg.media[0].mimeType.split('/')[1] || 'FILE').toUpperCase()}</div>
-                                    </div>
-                                    <button 
-                                      onClick={() => handleDownload(msg.media[0].url, msg.media[0].filename)}
-                                      style={{ padding: '8px', backgroundColor: 'var(--primary)', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer' }}
-                                    >
-                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                    </button>
-                                  </div>
-                                )}
-                            </div>
-                        )}
-                        {msg.content}
-                        {msg.isPending && (
-                           <div style={{ fontSize: '0.65rem', marginTop: '4px', opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px', fontStyle: 'italic', color: msg.status === 'failed' ? '#ef4444' : 'inherit' }}>
-                              {msg.status === 'syncing' ? (
-                                <div style={{ width: '10px', height: '10px', border: '1.5px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                              ) : (
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                              )}
-                              {msg.status === 'syncing' ? 'Sincronizando...' : msg.status === 'failed' ? 'Error. Reintentando...' : 'Pendiente de sincronización'}
-                           </div>
-                        )}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px', alignSelf: msg.isMe ? 'flex-end' : 'flex-start', margin: '0 4px' }}>
-                        {msg.isPending ? 'Ahora' : (mounted ? formatTimeEcuador(msg.createdAt) : '')}
-                    </span>
-                  </div>
-                ))
-              )}
-              </div>
-              
-              {/* Floating New Messages Indicator */}
-              {hasNewMessages && (
-                <button
-                  onClick={() => {
-                    chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' })
-                    setHasNewMessages(false)
-                  }}
-                  style={{
-                    position: 'absolute',
-                    bottom: '15px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    backgroundColor: 'var(--primary)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '20px',
-                    padding: '8px 16px',
-                    fontSize: '0.8rem',
-                    fontWeight: 'bold',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    zIndex: 50,
-                    animation: 'bounce 2s infinite'
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
-                  Nuevos Mensajes (Desliza)
-                </button>
-              )}
-            </div>
-
-            <div style={isSmallScreen ? {
-              paddingTop: '12px', 
-              paddingLeft: '10px', 
-              paddingRight: '10px', 
-              paddingBottom: 'env(safe-area-inset-bottom, 12px)',
-              backgroundColor: 'var(--bg-deep)', 
-              borderTop: '1px solid var(--border-color)', 
-              display: 'flex', 
-              gap: '8px', 
-              alignItems: 'center', 
+        {/* End of REGISTROS */}
+        {/* 2. BITÁCORA / CHAT UNIFICADO - MODAL APPROACH */}
+        {activeTab === 'chat' && (
+          <div 
+            style={{ 
               position: 'fixed', 
-              bottom: '0', 
-              left: 0,
-              right: 0,
-              zIndex: 100,
-              boxShadow: '0 -2px 15px rgba(0,0,0,0.4)'
-            } : { 
-              padding: '15px', 
-              backgroundColor: 'var(--bg-deep)', 
-              borderTop: '1px solid var(--border-color)', 
+              top: 0, left: 0, right: 0, bottom: 0, 
+              backgroundColor: 'rgba(0,0,0,0.85)', 
+              backdropFilter: 'blur(10px)',
+              zIndex: 10000, 
               display: 'flex', 
-              gap: '8px', 
               alignItems: 'center', 
-              position: 'sticky', 
-              bottom: 0, 
-              zIndex: 10 
-            }}>
-              <label className="btn btn-ghost" style={{ padding: '10px', color: 'var(--primary)', cursor: (isFieldStaff && !activeRecord) ? 'not-allowed' : 'pointer', flexShrink: 0, opacity: (isFieldStaff && !activeRecord) ? 0.5 : 1 }} title="Tomar Foto/Video">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                <input 
-                  type="file" 
-                  accept="image/*,video/*" 
-                  capture="environment" 
-                  style={{ display: 'none' }} 
-                  disabled={isFieldStaff && !activeRecord}
-                  onChange={(e) => { 
-                    if (isFieldStaff && !activeRecord) {
-                      alert('⚠️ DEBES INICIAR JORNADA antes de enviar archivos.')
-                      return
-                    }
-                    const file = e.target.files?.[0]; 
-                    if (file) handleSendMessage(null as any, '', activePhase as number, file) 
-                  }} 
-                />
-              </label>
-              <form onSubmit={(e) => {
-                if (isFieldStaff && !activeRecord) {
-                  e.preventDefault()
-                  alert('⚠️ DEBES INICIAR JORNADA antes de enviar mensajes o notas.')
-                  return
-                }
-                handleSendMessage(e)
-              }} style={{ flex: 1, display: 'flex', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder={isFieldStaff && !activeRecord ? "Inicia jornada para enviar..." : "Escribe un mensaje..."}
-                  value={message} 
-                  onChange={e => setMessage(e.target.value)} 
-                  disabled={isFieldStaff && !activeRecord}
-                  style={{ 
-                    flex: 1, 
-                    fontSize: isSmallScreen ? '0.85rem' : '0.9rem',
-                    opacity: (isFieldStaff && !activeRecord) ? 0.6 : 1
-                  }} 
-                />
-                <button type="submit" className="btn btn-primary" disabled={loading || !message.trim() || activePhase === undefined || (isFieldStaff && !activeRecord)} style={{ flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                </button>
-              </form>
+              justifyContent: 'center', 
+              padding: isSmallScreen ? '12px' : '40px' 
+            }} 
+            onClick={() => setActiveTab('records')}
+          >
+            <div 
+              style={{ 
+                width: '100%', 
+                maxWidth: '1000px', 
+                height: isSmallScreen ? '95%' : '85%', 
+                backgroundColor: '#0b141a', 
+                borderRadius: '24px', 
+                overflow: 'hidden', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                position: 'relative', 
+                boxShadow: '0 25px 60px rgba(0,0,0,0.6)',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }} 
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close Handle for Mobile */}
+              <div 
+                style={{ height: '6px', width: '40px', background: 'rgba(255,255,255,0.2)', borderRadius: '3px', margin: '12px auto 4px auto', cursor: 'grab', display: isSmallScreen ? 'block' : 'none' }}
+                onClick={() => setActiveTab('records')}
+              />
+              
+              <ProjectChatUnified
+                project={project}
+                messages={liveChat} 
+                userId={userId}
+                isOperatorView={isFieldStaff}
+                activeRecord={activeRecord}
+                onDayAction={handleDayRecord}
+                backUrl={panelBase} 
+                onBack={() => setActiveTab('records')}
+                onSendMessage={(content, type, extraData) => {
+                  const isTechnicalAction = type === 'EXPENSE_LOG' || type === 'FILE' || type === 'IMAGE' || type === 'VIDEO' || type === 'AUDIO'
+                  if (isFieldStaff && !activeRecord && isTechnicalAction) {
+                    alert('⚠️ DEBES INICIAR JORNADA antes de realizar esta acción técnica.')
+                    return
+                  }
+
+                  if (type === 'EXPENSE_LOG') {
+                     handleSendMessage(null as any, content, activePhase || undefined, extraData?.file, extraData, 'EXPENSE_LOG');
+                  } else if (type === 'FILE' || type === 'IMAGE') {
+                     handleSendMessage(null as any, '', activePhase || undefined, extraData.file, null, type === 'FILE' ? undefined : type);
+                  } else {
+                     handleSendMessage(null as any, content, activePhase || undefined, undefined, undefined, type);
+                  }
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
+    </div>
+      {/* End of Section Containers */}
 
       {/* WhatsApp Forward Modal */}
       {waForwardMsg && (

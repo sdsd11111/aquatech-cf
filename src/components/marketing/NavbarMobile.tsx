@@ -71,9 +71,10 @@ export default function NavbarMobile() {
             {dropdownItems.map((item) => (
               <div key={item.name} className="flex flex-col w-full border-b border-gray-100">
                 <div className="flex items-center w-full min-h-[56px]">
-                  {/* Category Title Area */}
-                  <button 
-                    onClick={() => setActiveMobileCategory(activeMobileCategory === item.name ? null : item.name)}
+                  {/* Category Title Area - NOW CLICKABLE AS LINK */}
+                  <Link 
+                    href={item.href}
+                    onClick={closeMenu}
                     className="flex-1 flex items-center text-left transition-colors active:bg-gray-50 h-[56px]"
                     style={{ 
                       fontSize: '17px', 
@@ -83,9 +84,9 @@ export default function NavbarMobile() {
                     }}
                   >
                     {item.name}
-                  </button>
+                  </Link>
 
-                  {/* Separated Arrow Area (Apple Style) */}
+                  {/* Separated Arrow Area (Apple Style) - TOGGLES DROPDOWN */}
                   <button 
                     onClick={() => setActiveMobileCategory(activeMobileCategory === item.name ? null : item.name)}
                     className="w-[56px] h-[56px] border-l border-gray-100 flex items-center justify-center transition-colors active:bg-gray-50"

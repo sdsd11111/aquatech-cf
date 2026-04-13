@@ -140,7 +140,7 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
   }))
 
   return (
-    <div className="pt-0 pl-0 pr-0 sm:pt-6 sm:pl-6 sm:pr-6 pb-24">
+    <div className="pt-0 pl-0 pr-0 sm:pt-6 sm:pl-6 sm:pr-6">
       <ProjectExecutionClient 
         {...deepSerialize({
           project: safeProject,

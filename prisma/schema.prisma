@@ -34,6 +34,7 @@ model User {
   projectViews     ProjectView[]
   createdProjects  Project[]         @relation("ProjectCreator")
   createdQuotes    Quote[]           @relation("QuoteCreator")
+  pushSubs         PushSubscription[]
 
   @@map("users")
 }
@@ -201,6 +202,7 @@ model BudgetItem {
 model Quote {
   id              Int         @id @default(autoincrement())
   projectId       Int?        @map("project_id")
+  isBudget        Boolean     @default(false) @map("is_budget")
   clientId        Int         @map("client_id")
   status          QuoteStatus @default(BORRADOR)
   totalAmount     Decimal     @default(0.00) @map("total_amount") @db.Decimal(12, 2)
@@ -276,6 +278,7 @@ model ChatMessage {
   userId    Int           @map("user_id")
   content   String?       @db.Text
   type      MessageType   @default(TEXT)
+  extraData Json?       @map("extra_data")
   createdAt DateTime      @default(now()) @map("created_at")
   lat       Decimal?      @db.Decimal(10, 7)
   lng       Decimal?      @db.Decimal(10, 7)
@@ -329,6 +332,21 @@ model ProjectGalleryItem {
 
   @@index([projectId])
   @@map("project_gallery_items")
+}
+
+model PushSubscription {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  endpoint   String   @db.VarChar(500)
+  p256dh     String   @db.VarChar(200)
+  auth       String   @db.VarChar(100)
+  deviceName String?  @map("device_name") @db.VarChar(100)
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model BlogCategory {

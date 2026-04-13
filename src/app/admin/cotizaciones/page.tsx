@@ -13,12 +13,27 @@ export default async function CotizacionesPage() {
   const role = session?.user?.role || 'OPERATOR'
   const userId = session?.user?.id ? Number(session.user.id) : null
 
-  const quotes = await prisma.quote.findMany({
+  const quotesRaw = await prisma.quote.findMany({
     where: role === 'OPERATOR' ? { userId: userId } : {},
     include: {
       client: { select: { name: true } },
       project: { select: { title: true } }
     },
+    orderBy: { createdAt: 'desc' }
+  })
+
+  // Manual injection to bypass stale prisma client
+  const statusRaw = await prisma.$queryRaw<any[]>`SELECT id, is_budget FROM quotes`
+  const statusMap = new Map(statusRaw.map(s => [s.id, !!s.is_budget]))
+
+  const quotes = quotesRaw.map((q: any) => ({
+    ...q,
+    isBudget: statusMap.get(q.id) || false
+  }))
+
+  // Fetch projects for the "Send to Project" feature
+  const projects = await prisma.project.findMany({
+    select: { id: true, title: true, client: { select: { name: true } } },
     orderBy: { createdAt: 'desc' }
   })
 
@@ -35,7 +50,10 @@ export default async function CotizacionesPage() {
         </div>
       </div>
 
-      <QuotesListClient initialQuotes={deepSerialize(quotes)} />
+      <QuotesListClient 
+        initialQuotes={deepSerialize(quotes)} 
+        activeProjects={deepSerialize(projects)}
+      />
     </div>
   )
 }

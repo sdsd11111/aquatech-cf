@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp';
-import { getLocalNow, formatTimeEcuador } from '@/lib/date-utils';
+import { getLocalNow, formatTimeEcuador, formatDateEcuador } from '@/lib/date-utils';
 
 /**
  * RUTA DE CRON: https://dominio.com/api/cron/notifications?secret=...
@@ -59,7 +59,9 @@ export async function GET(request: Request) {
           
           op.appointments.forEach((apt, idx) => {
             const time = formatTimeEcuador(apt.startTime);
-            summary += `${idx + 1}. 🕙 *${apt.title}* a las ${time}\n`;
+            const date = formatDateEcuador(apt.startTime);
+            const descrText = apt.description ? `\n   📝 *Nota:* ${apt.description}` : '';
+            summary += `${idx + 1}. 🕙 *${apt.title}* a las ${time} (${date})${descrText}\n\n`;
           });
 
           summary += `\n¡Que tengas un excelente día de trabajo! 👷💦`;
@@ -92,13 +94,17 @@ export async function GET(request: Request) {
 
       let reminderMessage = '';
       
+      const dateLocal = formatDateEcuador(apt.startTime);
+      const timeLocal = formatTimeEcuador(apt.startTime);
+      const descrText = apt.description ? `\n📝 *Nota:* ${apt.description}` : '';
+      
       // Ventanas de tiempo para evitar duplicados si el cron corre cada 5-10 mins
       if (diffMins >= 58 && diffMins <= 62) {
-        reminderMessage = `⏰ *Recordatorio (1 hora):* Hola ${apt.user.name}, tu tarea *"${apt.title}"* comienza en 60 minutos.`;
+        reminderMessage = `⏰ *Recordatorio (1 hora):*\nHola ${apt.user.name}, tu tarea *"${apt.title}"* comienza en 60 minutos.\n📅 ${dateLocal} a las ${timeLocal}${descrText}`;
       } else if (diffMins >= 28 && diffMins <= 32) {
-        reminderMessage = `⏰ *Recordatorio (30 min):* Hola ${apt.user.name}, tu tarea *"${apt.title}"* comienza en 30 minutos.`;
+        reminderMessage = `⏰ *Recordatorio (30 min):*\nHola ${apt.user.name}, tu tarea *"${apt.title}"* comienza en 30 minutos.\n📅 ${dateLocal} a las ${timeLocal}${descrText}`;
       } else if (diffMins >= 8 && diffMins <= 12) {
-        reminderMessage = `⚠️ *Aviso (10 min):* Hola ${apt.user.name}, tu tarea *"${apt.title}"* está por comenzar en 10 minutos.`;
+        reminderMessage = `⚠️ *Aviso (10 min):*\nHola ${apt.user.name}, tu tarea *"${apt.title}"* está por comenzar en 10 minutos.\n📅 ${dateLocal} a las ${timeLocal}${descrText}`;
       }
 
       if (reminderMessage) {

@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { useLiveQuery } from 'dexie-react-hooks'
 import Link from 'next/link'
 import CalendarView from '@/components/Calendar/CalendarView'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 // Inline SVG icons to match project pattern
 const svgProps = (size: number, style?: React.CSSProperties, className?: string) => ({
   width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
@@ -38,6 +39,22 @@ export default function OperatorDashboardClient({
   const [appointments, setAppointments] = useState(initialAppointments)
   const [projects, setProjects] = useState(initialProjects)
   const [selectedTask, setSelectedTask] = useState<any>(null)
+  const [pushDismissed, setPushDismissed] = useState(true)
+  const { status: pushStatus, subscribe: pushSubscribe, isSubscribing } = usePushNotifications()
+
+  // Show push banner if not subscribed and not recently dismissed
+  useEffect(() => {
+    const dismissed = localStorage.getItem('push_dismissed')
+    if (dismissed) {
+      const dismissedAt = Number(dismissed)
+      // Show again after 7 days
+      if (Date.now() - dismissedAt > 7 * 24 * 60 * 60 * 1000) {
+        setPushDismissed(false)
+      }
+    } else {
+      setPushDismissed(false)
+    }
+  }, [])
 
   // Polling for live project updates
   useEffect(() => {
@@ -177,6 +194,68 @@ export default function OperatorDashboardClient({
           </div>
         )}
       </div>
+
+      {/* Push Notification Banner */}
+      {pushStatus !== 'subscribed' && pushStatus !== 'unsupported' && pushStatus !== 'denied' && pushStatus !== 'loading' && !pushDismissed && (
+        <div style={{
+          background: 'linear-gradient(135deg, #0070c0, #38bdf8)',
+          borderRadius: '16px',
+          padding: '16px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '15px',
+          flexWrap: 'wrap',
+          margin: '15px 0 0 0',
+          boxShadow: '0 4px 20px rgba(0, 112, 192, 0.3)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '200px' }}>
+            <span style={{ fontSize: '1.8rem' }}>🔔</span>
+            <div>
+              <p style={{ margin: 0, color: 'white', fontWeight: 'bold', fontSize: '0.95rem' }}>Activa las Notificaciones</p>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.85)', fontSize: '0.8rem' }}>Recibe alertas de mensajes, tareas y proyectos en tu celular</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={async () => {
+                const ok = await pushSubscribe()
+                if (ok) setPushDismissed(true)
+              }}
+              disabled={isSubscribing}
+              style={{
+                backgroundColor: 'white',
+                color: '#0070c0',
+                fontWeight: 'bold',
+                padding: '8px 20px',
+                borderRadius: '10px',
+                border: 'none',
+                fontSize: '0.85rem',
+                cursor: 'pointer'
+              }}
+            >
+              {isSubscribing ? 'Activando...' : '✓ Activar'}
+            </button>
+            <button
+              onClick={() => {
+                localStorage.setItem('push_dismissed', String(Date.now()))
+                setPushDismissed(true)
+              }}
+              style={{
+                backgroundColor: 'transparent',
+                color: 'rgba(255,255,255,0.8)',
+                border: '1px solid rgba(255,255,255,0.4)',
+                padding: '8px 14px',
+                borderRadius: '10px',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Luego
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="tabs tabs-nowrap" style={{ marginTop: 'var(--space-lg)' }}>
         <button className={`tab ${activeTab === 'TAREAS' ? 'active' : ''}`} onClick={() => setActiveTab('TAREAS')}>

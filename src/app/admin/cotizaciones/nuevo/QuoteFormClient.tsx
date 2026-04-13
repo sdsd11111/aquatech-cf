@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import MediaCapture from '@/components/MediaCapture'
 import BudgetBuilder, { BudgetItem } from '@/components/BudgetBuilder'
@@ -8,13 +8,14 @@ import BudgetBuilder, { BudgetItem } from '@/components/BudgetBuilder'
 interface QuoteFormProps {
   clients: any[]
   materials: any[]
+  projects?: any[]
   prefetchedProject?: any
   initialQuote?: any
 }
 
 import { useLocalStorage } from '@/hooks/useLocalStorage'
 
-export default function QuoteFormClient({ clients, materials, prefetchedProject, initialQuote }: QuoteFormProps) {
+export default function QuoteFormClient({ clients, materials, projects = [], prefetchedProject, initialQuote }: QuoteFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [clientData, setClientData] = useLocalStorage('quote_draft_client', {
@@ -116,7 +117,41 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject,
     initialQuote ? getInitialMode() : (prefetchedProject?.clientId ? 'EXISTING' : 'NEW')
   )
   const [selectedClientId, setSelectedClientId] = useState(initialQuote?.clientId || prefetchedProject?.clientId || '')
+  
+  // Project selection state
+  const [selectedProjectId, setSelectedProjectId] = useState<number | string>(initialQuote?.projectId || prefetchedProject?.id || '')
+  const [projectSearch, setProjectSearch] = useState('')
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false)
+  const projectDropdownRef = useRef<HTMLDivElement>(null)
+
   const [isFirstRender, setIsFirstRender] = useState(true)
+
+  // Auto-close project dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(event.target as Node)) {
+        setShowProjectDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Filter projects with intelligent search
+  const filteredProjects = useMemo(() => {
+    if (!projectSearch.trim()) return projects.slice(0, 10)
+    const terms = projectSearch.toLowerCase().split(/\s+/).filter(Boolean)
+    return projects.filter(p => {
+      const targetText = `${p.title || ''} ${p.client?.name || ''} ${p.id}`.toLowerCase()
+      return terms.every(term => targetText.includes(term))
+    }).slice(0, 50)
+  }, [projectSearch, projects])
+
+  const selectedProjectTitle = useMemo(() => {
+    if (!selectedProjectId) return ''
+    const p = projects.find(proj => proj.id === Number(selectedProjectId))
+    return p ? p.title : ''
+  }, [selectedProjectId, projects])
 
   // Auto-fill client data when selection changes
   useEffect(() => {
@@ -172,7 +207,7 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject,
 
     const payload = {
       clientId: selectedClientId ? Number(selectedClientId) : null,
-      projectId: prefetchedProject?.id,
+      sendToBitacoraId: selectedProjectId ? Number(selectedProjectId) : null,
       ...calculations,
       totalAmount: calculations.grandTotal,
       ...clientData,
@@ -201,7 +236,7 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject,
           const tempId = Date.now()
           const actualId = await db.outbox.add({
              type: 'QUOTE',
-             projectId: prefetchedProject?.id || 0,
+             projectId: Number(selectedProjectId) || 0,
              payload,
              timestamp: tempId,
              status: 'pending'
@@ -259,6 +294,78 @@ export default function QuoteFormClient({ clients, materials, prefetchedProject,
     <form onSubmit={handleSubmit} className="quote-form-layout">
       
       <div style={{ display: 'grid', gap: '20px', minWidth: 0 }}>
+        
+        {/* Project Link Box */}
+        <div className="card shadow-sm" style={{ padding: '25px', borderLeft: '4px solid var(--secondary)', borderRadius: '16px' }}>
+            <h3 style={{ color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 20px 0', fontSize: '1.1rem' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Notificar a Bitácora del Proyecto (Opcional)
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+              Selecciona un proyecto solo si deseas enviar una copia informativa de esta cotización a su bitácora de mensajes. No se creará un vínculo permanente.
+            </p>
+           
+           <div style={{ position: 'relative' }} ref={projectDropdownRef}>
+              <div style={{ position: 'relative' }}>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="🔍 Buscar proyecto por nombre o cliente..." 
+                  value={selectedProjectId ? selectedProjectTitle : projectSearch}
+                  onChange={e => {
+                    setProjectSearch(e.target.value)
+                    setShowProjectDropdown(true)
+                    if (selectedProjectId) setSelectedProjectId('')
+                  }}
+                  onFocus={() => setShowProjectDropdown(true)}
+                  style={{ paddingLeft: '35px', borderColor: selectedProjectId ? 'var(--secondary)' : '' }}
+                />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                {selectedProjectId && (
+                  <button 
+                    type="button" 
+                    onClick={() => { setSelectedProjectId(''); setProjectSearch(''); }}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {showProjectDropdown && !selectedProjectId && (
+                <div className="catalog-dropdown" style={{ zIndex: 100, maxHeight: '250px', overflowY: 'auto' }}>
+                  {filteredProjects.length > 0 ? (
+                    filteredProjects.map(p => (
+                      <div 
+                        key={p.id} 
+                        onClick={() => {
+                          setSelectedProjectId(p.id)
+                          setShowProjectDropdown(false)
+                          // Also set client if existing
+                          if (p.clientId) {
+                            setSelectedClientId(p.clientId.toString())
+                            setClientMode('EXISTING')
+                          }
+                        }} 
+                        className="catalog-item"
+                        style={{ padding: '12px' }}
+                      >
+                        <div style={{ fontWeight: '600', color: 'var(--text)' }}>{p.title}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Cliente: {p.client?.name || 'Varios'} • ID: {p.id}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: '15px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      No se encontraron proyectos.
+                    </div>
+                  )}
+                </div>
+              )}
+           </div>
+        </div>
+
         {/* Client Box */}
         <div className="card shadow-sm" style={{ padding: '25px', borderRadius: '16px' }}>
           <div className="quote-client-header">

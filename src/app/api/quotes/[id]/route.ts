@@ -27,8 +27,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     await prisma.$transaction(async (tx) => {
       const quote = await tx.quote.findUnique({
         where: { id: quoteId },
-        select: { clientId: true }
+        select: { clientId: true, projectId: true }
       })
+
+      if (quote?.projectId) {
+        throw new Error('NO_DELETE_LINKED_QUOTE');
+      }
 
       await tx.quote.delete({ where: { id: quoteId } })
 
@@ -45,7 +49,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === 'NO_DELETE_LINKED_QUOTE') {
+      return NextResponse.json({ 
+        error: 'No se puede eliminar una cotización vinculada a un proyecto activo. Esto garantiza la integridad financiera del proyecto.' 
+      }, { status: 400 })
+    }
     return NextResponse.json({ error: 'Error deleting quote' }, { status: 500 })
   }
 }
