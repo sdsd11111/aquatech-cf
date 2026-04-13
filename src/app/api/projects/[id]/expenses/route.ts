@@ -120,6 +120,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         lat: lat ? Number(lat) : null,
         lng: lng ? Number(lng) : null,
         createdAt: createdAt ? new Date(forceEcuadorTZ(createdAt)) : undefined,
+        extraData: {
+          amount: Number(amount),
+          isNote: !!isNote,
+          description: description
+        }
       }
     })
 

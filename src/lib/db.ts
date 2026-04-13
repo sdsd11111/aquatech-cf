@@ -56,8 +56,8 @@ export class OfflineDatabase extends Dexie {
       auth: 'id',
       materialsCache: 'id, code, name, category'
     });
-    this.version(4).stores({
-      outbox: '++id, projectId, status, timestamp',
+    this.version(6).stores({
+      outbox: '++id, projectId, status, timestamp, type',
       auth: 'id',
       materialsCache: 'id, code, name, category',
       clientsCache: 'id, name, ruc'

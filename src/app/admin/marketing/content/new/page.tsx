@@ -52,17 +52,6 @@ export default function NewPipelinePage() {
 
   return (
     <div className="new-pipeline-page" style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem' }}>
-      <button 
-        onClick={() => router.back()} 
-        className="btn btn-outline-secondary mb-4"
-        style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none' }}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="19" y1="12" x2="5" y2="12"></line>
-          <polyline points="12 19 5 12 12 5"></polyline>
-        </svg>
-        Volver
-      </button>
 
       <div className="card shadow-sm p-4 p-md-5" style={{ background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--border-color)', position: 'relative', overflow: 'hidden' }}>
         

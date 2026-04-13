@@ -59,6 +59,7 @@ export default function TeamMemberPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [securityLoading, setSecurityLoading] = useState(false)
   const [securityMsg, setSecurityMsg] = useState({ text: '', type: '' as 'success' | 'error' | '' })
+  const [isClient, setIsClient] = useState(false)
   const passwordInputRef = useRef<HTMLInputElement>(null)
 
   // Calendar States
@@ -73,6 +74,10 @@ export default function TeamMemberPage() {
     }
     setShowPassword(!showPassword)
   }
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   useEffect(() => {
     if (passwordInputRef.current) {
@@ -128,6 +133,8 @@ export default function TeamMemberPage() {
     }
   }
 
+  if (!isClient) return null
+  
   const availableMonths = useMemo(() => {
     if (!activityData?.timeline) return []
     const months = new Set<string>()
@@ -331,9 +338,6 @@ export default function TeamMemberPage() {
     <div className="admin-content" style={{ padding: 'var(--space-xl)', maxWidth: '1200px', margin: '0 auto' }}>
       
       <div className="page-header" style={{ marginBottom: 'var(--space-xl)' }}>
-        <Link href="/admin/team" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-md)' }}>
-          <ArrowLeft size={16} /> Volver al Equipo
-        </Link>
         <h1 className="page-title">{member.name}</h1>
         <div className="page-subtitle" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="badge badge-info">{member.role === 'ADMIN' ? 'Administrador' : member.role === 'SUPERADMIN' ? 'Super Admin' : member.role === 'ADMINISTRADORA' ? 'Administradora' : member.role === 'SUBCONTRATISTA' ? 'Subcontratista' : 'Operador Especialista'}</span>
@@ -533,7 +537,8 @@ export default function TeamMemberPage() {
                     { slug: 'reportes', label: 'Reportes' },
                     { slug: 'cotizaciones', label: 'Cotizaciones' },
                     { slug: 'inventario', label: 'Inventario' },
-                    { slug: 'recursos', label: 'Recursos' }
+                    { slug: 'recursos', label: 'Recursos' },
+                    { slug: 'proyectos_admin', label: 'Admin Proyectos (Ver Todos)' }
                   ].map(module => {
                     const currentPerms = getPermissionsArray(member.permissions, member.role)
                     const isChecked = currentPerms.includes(module.slug)
@@ -578,16 +583,6 @@ export default function TeamMemberPage() {
                     )
                   })}
                 </div>
-                <style jsx>{`
-                  .permission-chip:hover {
-                    background-color: rgba(255,255,255,0.05) !important;
-                    border-color: rgba(255,255,255,0.1) !important;
-                    transform: translateY(-2px);
-                  }
-                  .permission-chip:active {
-                    transform: scale(0.95);
-                  }
-                `}</style>
               </div>
             )}
           </div>
@@ -734,7 +729,7 @@ export default function TeamMemberPage() {
                         {event.type === 'CHAT_MESSAGE' && (
                           <div>
                             {event.data.content && (
-                              <p style={{ fontSize: '0.95rem', color: 'var(--text)', whiteSpace: 'pre-wrap', margin: '0 0 var(--space-md) 0' }} 
+                              <p style={{ fontSize: '0.95rem', color: 'var(--text)', whiteSpace: 'pre-wrap', margin: '0 0 var(--space-md) 0', overflowWrap: 'anywhere', wordBreak: 'break-word' }} 
                                  dangerouslySetInnerHTML={{ __html: event.data.content.replace(/\n/g, '<br/>') }}></p>
                             )}
                             

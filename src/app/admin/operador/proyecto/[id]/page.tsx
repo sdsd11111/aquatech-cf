@@ -120,7 +120,8 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
     createdAt: msg.createdAt.toISOString(),
     userName: msg.user.name,
     isMe: msg.userId === userId,
-    media: msg.media
+    media: msg.media,
+    extraData: msg.extraData
   }))
 
   const safeRecord = globalActiveRecord ? { 

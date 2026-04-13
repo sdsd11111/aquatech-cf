@@ -355,7 +355,7 @@ export default function Sidebar() {
       'marketing': 'marketing',
       'blog': 'blog',
       'calendario_maestro': 'calendario',
-      'proyectos': 'proyectos'
+      'proyectos': 'proyectos_admin'
     }
     const slug = slugMap[moduleSlug] || moduleSlug
     

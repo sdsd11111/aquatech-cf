@@ -1236,9 +1236,6 @@ export default function ProjectDetailClient({ project, availableOperators = [] }
       <div className="dashboard-header mb-6" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
-            <Link href="/admin/proyectos" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              &larr; Volver
-            </Link>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <select
                   value={['COMPLETADO', 'CANCELADO', 'PENDIENTE'].includes(currentStatus) ? 'ARCHIVADO' : currentStatus}

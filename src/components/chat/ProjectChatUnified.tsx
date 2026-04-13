@@ -283,7 +283,8 @@ export default function ProjectChatUnified({
                     padding: '2px 6px',
                     cursor: 'pointer',
                     outline: 'none',
-                    maxWidth: '120px'
+                    maxWidth: '120px',
+                    textOverflow: 'ellipsis'
                   }}
                 >
                   <option value="" style={{ color: 'black' }}>General (Toda la obra)</option>
@@ -435,7 +436,12 @@ export default function ProjectChatUnified({
                      <div style={{ fontSize: '0.65rem', fontWeight: 'bold', color: (msg.extraData?.isNote || msg.isNote) ? '#3b82f6' : '#10b981' }}>
                        {(msg.extraData?.isNote || msg.isNote) ? '🏷️ NOTA DE GASTO' : '💰 GASTO REAL'}
                      </div>
-                     <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>$ {msg.extraData?.amount || msg.amount || '0.00'}</div>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                        $ {(() => {
+                          const val = msg.extraData?.amount ?? msg.amount;
+                          return val !== undefined && val !== null ? Number(val).toFixed(2) : '0.00';
+                        })()}
+                      </div>
                      <div style={{ fontSize: '0.85rem', opacity: 0.9 }}>{msg.content}</div>
                      {mediaObj && (
                         <div style={{ marginTop: '5px', borderRadius: '4px', overflow: 'hidden', cursor: 'pointer' }} onClick={() => window.open(mediaObj.url, '_blank')}>
@@ -1108,6 +1114,53 @@ export default function ProjectChatUnified({
         @keyframes slideUp {
           from { transform: translateY(20px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* Responsive Fixes */
+        @media (max-width: 480px) {
+          .chat-header {
+            padding: 8px 10px;
+          }
+          .project-avatar {
+            width: 32px;
+            height: 32px;
+            font-size: 0.8rem;
+          }
+          .project-info h1 {
+            font-size: 0.9rem;
+            max-width: 150px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .project-info p {
+            font-size: 0.7rem;
+            gap: 4px !important;
+          }
+          .chat-body {
+            padding: 15px 3% 80px 3%;
+          }
+          .message-row {
+            max-width: 92%;
+          }
+          .header-actions {
+            gap: 4px;
+          }
+          .btn-jornada {
+            padding: 4px 8px;
+            font-size: 0.7rem;
+          }
+          .input-container {
+            padding: 6px 12px;
+            min-height: 48px;
+          }
+          .input-container textarea {
+            font-size: 0.95rem;
+          }
+          .btn-send {
+            width: 42px;
+            height: 42px;
+          }
         }
       `}</style>
     </div>

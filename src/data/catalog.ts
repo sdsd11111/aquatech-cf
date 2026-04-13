@@ -94,6 +94,6 @@ export const catalogData: Product[] = [
     code: "AQ-HID-EXE",
     category: 'Hidromasajes',
     price: 3200.00,
-    img: "https://cesarweb.b-cdn.net/home/featured-product.webp"
+    img: "https://cesarweb.b-cdn.net/Hidromasaje-Aquatech/model-duo.webp"
   }
 ];

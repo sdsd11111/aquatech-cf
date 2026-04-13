@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Send, UploadCloud, CheckCircle2, Loader2, Info } from 'lucide-react'
+import { Send, UploadCloud, CheckCircle2, Loader2, Info, Plus } from 'lucide-react'
 
 export interface DynamicFormProps {
   categoryName: string;
@@ -18,7 +18,7 @@ export default function DynamicQuoteForm({
   showReferences = true 
 }: DynamicFormProps) {
   const [loading, setLoading] = useState(false)
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
+  const [filesData, setFilesData] = useState<{ url?: string; preview: string; name: string; loading: boolean }[]>([])
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -28,31 +28,71 @@ export default function DynamicQuoteForm({
 
   // Manejo de carga de archivos (Sube al API que conecta con Bunny.net)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const selectedFiles = Array.from(e.target.files || [])
+    if (selectedFiles.length === 0) return
 
-    try {
-      setLoading(true)
-      const data = new FormData()
-      data.append('file', file)
-
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: data
-      })
-
-      const json = await res.json()
-      if (res.ok) {
-        setUploadedUrl(json.url)
-      } else {
-        alert("Hubo un error subiendo el archivo: " + json.error)
-      }
-    } catch (error) {
-      console.error(error)
-      alert("Error de conexión al cargar la referencia.")
-    } finally {
-      setLoading(false)
+    // Limitar a 10 archivos totales
+    const totalPossible = filesData.length + selectedFiles.length
+    if (totalPossible > 10) {
+      alert("Puedes subir un máximo de 10 imágenes.")
+      return
     }
+
+    // Preparar nuevos archivos en el estado
+    const newFiles = selectedFiles.map(file => ({
+      preview: URL.createObjectURL(file),
+      name: file.name,
+      loading: true
+    }))
+
+    setFilesData(prev => [...prev, ...newFiles])
+    setLoading(true)
+
+    // Subir cada archivo individualmente
+    for (const [index, file] of selectedFiles.entries()) {
+      const currentIdx = filesData.length + index
+      
+      try {
+        const data = new FormData()
+        data.append('file', file)
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: data
+        })
+
+        const json = await res.json()
+        if (res.ok) {
+          setFilesData(prev => {
+            const updated = [...prev]
+            updated[currentIdx] = { ...updated[currentIdx], url: json.url, loading: false }
+            return updated
+          })
+        } else {
+          const errMsg = json.error || "Error desconocido"
+          alert(`Error al subir ${file.name}: ${errMsg}`)
+          console.error("Error subiendo:", errMsg)
+          setFilesData(prev => {
+            const updated = [...prev]
+            updated[currentIdx].loading = false
+            return updated
+          })
+        }
+      } catch (error) {
+        console.error("Error de red:", error)
+        setFilesData(prev => {
+            const updated = [...prev]
+            updated[currentIdx].loading = false
+            return updated
+          })
+      }
+    }
+    
+    setLoading(false)
+  }
+
+  const removeFile = (idx: number) => {
+    setFilesData(prev => prev.filter((_, i) => i !== idx))
   }
 
   // Generador del Mensaje de WhatsApp
@@ -62,27 +102,44 @@ export default function DynamicQuoteForm({
         return;
     }
 
-    let message = `*Cotización: ${categoryName}*\n\n`
-    message += `Hola Ingeniería Aquatech. Soy ${formData.name} desde la ciudad de ${formData.location}.\n\n`
+    const uploadedUrls = filesData.filter(f => f.url).map(f => f.url)
+    const isStillLoading = filesData.some(f => f.loading)
+
+    if (isStillLoading) {
+        alert("Espera a que todas las imágenes terminen de subir.");
+        return;
+    }
+
+    let message = `*SOLICITUD DE COTIZACIÓN TÉCNICA*\n`
+    message += `*Categoría:* ${categoryName}\n`
+    message += `------------------------------------------\n\n`
+    message += `👤 *Cliente:* ${formData.name}\n`
+    message += `📍 *Ubicación:* ${formData.location}\n`
     
     if (showDimensions && formData.dimensions) {
-      message += `📏 *Medidas/Área:* ${formData.dimensions}\n`
+      message += `📏 *Medidas:* ${formData.dimensions}\n`
     }
+    
     if (formData.details) {
       message += `📝 *Detalles:* ${formData.details}\n`
     }
-    if (uploadedUrl) {
-      message += `📸 *Referencia Arquitectónica adjunta:* ${uploadedUrl}\n`
+    
+    if (uploadedUrls.length > 0) {
+      message += `\n🖼️ *REFERENCIAS (${uploadedUrls.length}):*\n`
+      uploadedUrls.forEach((url, i) => {
+        message += `${i+1}. ${url}\n`
+      })
     }
     
-    message += `\nQuedo atento a su asesoría técnica.`
+    message += `\n------------------------------------------\n`
+    message += `*HIDROMASAJES AQUATECH - INGENIERÍA PURA*`
 
     const wpUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`
     window.open(wpUrl, '_blank')
   }
 
   return (
-    <div className="w-full bg-white p-0">
+    <div className="w-full bg-white p-0 text-left">
       <style jsx>{`
         .square-input {
           border-radius: 0px !important;
@@ -116,6 +173,35 @@ export default function DynamicQuoteForm({
         }
         h3, span { font-family: var(--font-brand); }
         label, input, textarea, p { font-family: var(--font-body); }
+        
+        .preview-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+          gap: 10px;
+          width: 100%;
+        }
+        .prefix-thumb {
+          aspect-ratio: 1;
+          position: relative;
+          border: 1px solid #004A87;
+          overflow: hidden;
+          background: #f9fafb;
+        }
+        .remove-btn {
+          position: absolute;
+          top: 0;
+          right: 0;
+          background: #004A87;
+          color: white;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          cursor: pointer;
+          z-index: 30;
+        }
       `}</style>
 
       <div className="mb-10 text-center md:text-left">
@@ -149,32 +235,59 @@ export default function DynamicQuoteForm({
 
       {showReferences && (
         <div className="mb-6">
-           <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-black mb-2">Imagen de Referencia o Plano</label>
-           <div className={`border-2 border-dashed ${uploadedUrl ? 'border-[#004A87] bg-[#004A87]/5' : 'border-gray-200 bg-white'} p-6 flex flex-col items-center justify-center relative transition-all`}>
-              <input 
-                 type="file" 
-                 accept="image/*,.pdf" 
-                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
-                 onChange={handleFileUpload}
-                 disabled={loading}
-              />
-              {loading ? (
-                 <div className="flex flex-col items-center text-[#004A87]">
-                    <Loader2 className="animate-spin mb-2" size={24} />
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Asegurando archivo...</span>
-                 </div>
-              ) : uploadedUrl ? (
-                 <div className="flex flex-col items-center text-[#004A87]">
-                    <CheckCircle2 size={32} className="mb-2" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-[#004A87]">Referencia Cargada Exitosamente</span>
-                    <span className="text-[8px] text-gray-500 mt-2 tracking-widest uppercase">Haz clic para cambiar de imagen</span>
-                 </div>
+           <label className="block text-[9px] font-black uppercase tracking-[0.2em] text-black mb-2">Imágenes de Referencia (Máx 10)</label>
+           
+           <div className={`border-2 border-dashed ${filesData.length > 0 ? 'border-[#004A87] bg-[#004A87]/5' : 'border-gray-200 bg-white'} p-4 flex flex-col items-center justify-center relative transition-all min-h-[100px]`}>
+              
+              {filesData.length > 0 ? (
+                <div className="w-full">
+                  <div className="preview-grid mb-4">
+                    {filesData.map((file, i) => (
+                      <div key={i} className="prefix-thumb">
+                        <img src={file.preview} className="w-full h-full object-cover" alt="Preview" />
+                        {file.loading && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <Loader2 className="animate-spin text-white" size={16} />
+                          </div>
+                        )}
+                        {!file.loading && file.url && (
+                          <div className="absolute bottom-0 right-0 bg-[#004A87] text-white p-0.5">
+                            <CheckCircle2 size={10} />
+                          </div>
+                        )}
+                        <button className="remove-btn" onClick={() => removeFile(i)}>×</button>
+                      </div>
+                    ))}
+                    {filesData.length < 10 && (
+                       <div className="prefix-thumb border-dashed bg-white border-gray-300 flex items-center justify-center cursor-pointer relative">
+                          <Plus size={20} className="text-gray-300" />
+                          <input 
+                            type="file" 
+                            multiple 
+                            accept="image/*" 
+                            className="absolute inset-0 opacity-0 cursor-pointer" 
+                            onChange={handleFileUpload}
+                          />
+                       </div>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-[#004A87] block text-center">
+                    {filesData.length} de 10 imágenes cargadas
+                  </span>
+                </div>
               ) : (
-                 <div className="flex flex-col items-center text-gray-400">
-                    <UploadCloud size={32} className="mb-2" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-black">Cargar Archivo al Servidor</span>
-                    <span className="text-[8px] font-medium tracking-widest uppercase mt-2">Formatos: JPG, PNG, WEBP, PDF (Max 5MB)</span>
-                 </div>
+                <div className="flex flex-col items-center text-gray-400 py-6">
+                  <UploadCloud size={32} className="mb-2" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-black">Seleccionar Referencias</span>
+                  <span className="text-[8px] font-medium tracking-widest uppercase mt-2">Formatos: JPG, PNG, WEBP (Máx 5MB)</span>
+                  <input 
+                    type="file" 
+                    multiple 
+                    accept="image/*" 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
+                    onChange={handleFileUpload}
+                  />
+                </div>
               )}
            </div>
         </div>
@@ -187,9 +300,10 @@ export default function DynamicQuoteForm({
 
       <button 
         onClick={handleWhatsAppSend}
-        className="btn-aquatech bg-black text-white hover:bg-[#004A87]"
+        className="btn-aquatech bg-black text-white hover:bg-[#004A87] disabled:opacity-50"
+        disabled={loading || filesData.some(f => f.loading)}
       >
-        Enviar Solicitud al Experto <Send size={16} />
+        {loading ? 'Subiendo Referencias...' : 'Enviar Solicitud al Experto'} <Send size={16} />
       </button>
 
       <div className="mt-4 flex items-start gap-2 justify-center text-gray-400">

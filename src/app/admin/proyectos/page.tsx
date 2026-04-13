@@ -19,13 +19,22 @@ export default function ProyectosPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null)
 
   const userRole = (session?.user as any)?.role
-  const isAuthorized = userRole && (userRole === 'SUPERADMIN' || userRole === 'ADMIN' || userRole === 'ADMINISTRADORA' || userRole === 'OPERATOR' || userRole === 'OPERADOR')
+  const userPermissions = (session?.user as any)?.permissions
+  
+  // Strict authorization check: Only admins or users with explicit 'proyectos_admin' permission
+  const isAuthorized = userRole && (
+    userRole === 'SUPERADMIN' || 
+    userRole === 'ADMIN' || 
+    userRole === 'ADMINISTRADORA' || 
+    userRole === 'ADMINISTRADOR' ||
+    (userPermissions && userPermissions.includes('proyectos_admin'))
+  )
 
   useEffect(() => {
     if (status === 'authenticated' && !isAuthorized) {
       router.push('/admin')
     }
-  }, [status, isAuthorized])
+  }, [status, isAuthorized, router])
 
   useEffect(() => {
     if (isAuthorized) {

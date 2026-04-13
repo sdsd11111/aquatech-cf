@@ -118,7 +118,8 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
     createdAt: msg.createdAt.toISOString(),
     userName: msg.user.name,
     isMe: msg.userId === userId,
-    media: msg.media
+    media: msg.media,
+    extraData: msg.extraData
   }))
 
   const safeRecord = activeDayRecord ? { id: activeDayRecord.id, startTime: activeDayRecord.startTime.toISOString() } : null

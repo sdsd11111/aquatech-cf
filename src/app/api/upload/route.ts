@@ -15,26 +15,38 @@ export async function POST(req: NextRequest) {
     const cleanName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '-');
     const filename = `${timestamp}-${cleanName}`;
     
-    // Subida a la carpeta de cotizaciones en Bunny.net
-    const zoneUrl = `https://storage.bunnycdn.com/cesarweb/Hidromasaje-Aquatech/cotizaciones/${filename}`;
+    // Use standard hostname if specific one is not provided
+    const storageHost = process.env.BUNNY_STORAGE_HOST || 'storage.bunnycdn.com';
+    const storageZone = process.env.BUNNY_STORAGE_ZONE || 'cesarweb';
+    const accessKey = process.env.BUNNY_STORAGE_API_KEY || '';
+    
+    // Ensure filename is clean
+    const cleanFilename = filename.toLowerCase();
+    const zoneUrl = `https://${storageHost}/${storageZone}/Hidromasaje-Aquatech/cotizaciones/${cleanFilename}`;
+
+    console.log(`[Upload API] Target: ${zoneUrl}`);
 
     const response = await fetch(zoneUrl, {
       method: 'PUT',
       headers: {
-        'AccessKey': process.env.BUNNY_STORAGE_PASSWORD || '',
+        'AccessKey': accessKey,
         'Content-Type': 'application/octet-stream',
       },
-      body: arrayBuffer,
+      body: Buffer.from(arrayBuffer), // Convert to Buffer for better compatibility with some fetch environments
     });
 
     if (response.ok) {
-      const publicUrl = `https://cesarweb.b-cdn.net/Hidromasaje-Aquatech/cotizaciones/${filename}`;
+      const pullZoneUrl = process.env.BUNNY_PULLZONE_URL || 'https://cesarweb.b-cdn.net';
+      const publicUrl = `${pullZoneUrl}/Hidromasaje-Aquatech/cotizaciones/${filename}`;
+      console.log(`[Upload API] Éxito: ${publicUrl}`);
       return NextResponse.json({ url: publicUrl });
     } else {
       const errorText = await response.text();
-      return NextResponse.json({ error: `Fallo CDN: ${errorText}` }, { status: 500 });
+      console.error(`[Upload API] Error Bunny CDN (${response.status}): ${errorText}`);
+      return NextResponse.json({ error: `Fallo CDN (${response.status}): ${errorText}` }, { status: 500 });
     }
   } catch (err: any) {
+    console.error(`[Upload API] Error fatal: ${err.message}`);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

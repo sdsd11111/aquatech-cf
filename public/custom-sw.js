@@ -1,7 +1,7 @@
 // ============================================================
 // Aquatech CRM — Custom Service Worker (Offline-First) v14
 // ============================================================
-const CACHE_VERSION = 'v29';
+const CACHE_VERSION = 'v30';
 const STATIC_CACHE = `aquatech-static-${CACHE_VERSION}`;
 const PAGES_CACHE  = `aquatech-pages-${CACHE_VERSION}`;
 const ASSETS_CACHE = `aquatech-assets-${CACHE_VERSION}`;
@@ -385,15 +385,15 @@ self.addEventListener('sync', (event) => {
  */
 function openAquatechDB() {
   return new Promise((resolve, reject) => {
-    // Corrected DB name to match Dexie instance 'AquatechOfflineDB'
-    const request = indexedDB.open('AquatechOfflineDB', 4);
+    // Open without version to use latest
+    const request = indexedDB.open('AquatechOfflineDB');
     
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
-    // If upgrade is needed from the SW, we do nothing to avoid breaking the main app
+    // Don't abort - let it open even if upgrade needed, 
+    // though Dexie should handle the actual schema definition
     request.onupgradeneeded = (e) => {
-      e.target.transaction.abort();
-      reject(new Error('Upgrade requested from SW. Aborting.'));
+      console.log('[SW] DB Upgrade needed in SW context...');
     };
   });
 }

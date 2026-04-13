@@ -380,7 +380,17 @@ export default function OperatorDashboardClient({
             {selectedTask.description && (
               <div style={{ marginBottom: '16px' }}>
                 <strong style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '1px' }}>DESCRIPCIÓN O NOTAS</strong>
-                <div style={{ marginTop: '4px', whiteSpace: 'pre-wrap', color: 'var(--text)', fontSize: '0.95rem', background: 'var(--bg-surface)', padding: '12px', borderRadius: '8px' }}>
+                <div style={{ 
+                  marginTop: '4px', 
+                  whiteSpace: 'pre-wrap', 
+                  color: 'var(--text)', 
+                  fontSize: '0.95rem', 
+                  background: 'var(--bg-surface)', 
+                  padding: '12px', 
+                  borderRadius: '8px',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere'
+                }}>
                   {selectedTask.description}
                 </div>
               </div>

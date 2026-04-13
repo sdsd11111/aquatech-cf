@@ -20,8 +20,7 @@ export default async function AdminDashboard() {
     '/admin/proyectos/nuevo',
     '/admin/cotizaciones/nuevo',
     '/admin/inventario',
-    '/admin/equipo',
-    '/admin/clientes'
+    '/admin/team'
   ]
 
   // 7-day metric date
