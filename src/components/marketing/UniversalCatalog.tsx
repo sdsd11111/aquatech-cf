@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, Filter, ShoppingCart, ZoomIn, X, ChevronRight, SlidersHorizontal, Tag } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { catalogData, Product } from '@/data/catalog'
 
 const categories = [
@@ -21,6 +21,7 @@ const accessoriesSubFilters = [
 
 export default function UniversalCatalog({ defaultCategory = 'Hidromasajes' }: { defaultCategory?: string }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [activeCategory, setActiveCategory] = useState(defaultCategory)
   const [activeSubTag, setActiveSubTag] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -123,8 +124,6 @@ export default function UniversalCatalog({ defaultCategory = 'Hidromasajes' }: {
                   <div key={cat} className="flex flex-col">
                     <button
                       onClick={() => {
-                        setActiveCategory(cat as any)
-                        setActiveSubTag(null) // Reset sub-filter when changing main category
                         const routeMap: Record<string, string> = {
                           'Hidromasajes': 'hidromasajes',
                           'Turcos': 'turcos',
@@ -135,10 +134,21 @@ export default function UniversalCatalog({ defaultCategory = 'Hidromasajes' }: {
                           'Riego': 'riego',
                           'Accesorios': 'accesorios'
                         }
-                        const route = routeMap[cat]
-                        if (route) {
-                          router.push(`/${route}#catalogo`, { scroll: false })
+                        
+                        const targetRoute = `/${routeMap[cat]}`
+                        
+                        // Si ya estamos en la ruta correcta, solo actualizamos el filtro localmente
+                        // Esto hace que la navegación sea instantánea y no se sienta el cambio de página
+                        if (pathname === targetRoute) {
+                          setActiveCategory(cat as any)
+                          setActiveSubTag(null)
+                          return
                         }
+
+                        // Si es una ruta diferente, navegamos
+                        setActiveCategory(cat as any)
+                        setActiveSubTag(null)
+                        router.push(`${targetRoute}#catalogo`, { scroll: false })
                       }}
                       className={`text-left px-5 py-4 text-[11px] font-bold uppercase tracking-widest transition-all border-b border-gray-100 flex justify-between items-center ${
                         activeCategory === cat 
@@ -211,45 +221,54 @@ export default function UniversalCatalog({ defaultCategory = 'Hidromasajes' }: {
             </div>
 
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                {filteredProducts.map((product) => (
-                  <motion.div 
-                    layout
-                    key={product.id}
-                    className="group bg-white border border-gray-100 p-3 flex flex-col hover:border-aquatech-blue transition-all"
-                  >
-                    <div 
-                      className="aspect-square bg-[#F9FAFB] relative overflow-hidden cursor-zoom-in"
-                      onClick={() => setSelectedImg(product.img)}
+              <motion.div 
+                layout
+                className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8"
+              >
+                <AnimatePresence mode="popLayout">
+                  {filteredProducts.map((product) => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.3 }}
+                      key={product.id}
+                      className="group bg-white border border-gray-100 p-3 flex flex-col hover:border-aquatech-blue transition-all"
                     >
-                       <img src={product.img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={product.name} />
-                       
-                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                          <ZoomIn className="text-aquatech-blue" size={32} strokeWidth={1.5} />
-                       </div>
-                    </div>
+                      <div 
+                        className="aspect-square bg-[#F9FAFB] relative overflow-hidden cursor-zoom-in"
+                        onClick={() => setSelectedImg(product.img)}
+                      >
+                         <img src={product.img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt={product.name} />
+                         
+                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                            <ZoomIn className="text-aquatech-blue" size={32} strokeWidth={1.5} />
+                         </div>
+                      </div>
 
-                    <div className="p-6 flex flex-col flex-1">
-                       <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest mb-2">{product.code}</span>
-                       <h4 className="text-[13px] font-black text-black uppercase tracking-tight leading-tight mb-8 group-hover:text-aquatech-blue transition-colors">
-                         {product.name}
-                       </h4>
-                       
-                       <div className="mt-auto pt-6 border-t border-gray-50 flex items-center justify-between">
-                          <div className="flex flex-col text-left">
-                            {product.promoPrice && (
-                              <span className="text-[9px] text-gray-300 line-through font-bold">USD {isMounted ? product.promoPrice.toLocaleString() : product.promoPrice}</span>
-                            )}
-                            <span className="text-[16px] font-black text-aquatech-blue tracking-tighter">USD {isMounted ? product.price.toLocaleString() : product.price}</span>
-                          </div>
-                          <Link href="/contacto" className="w-10 h-10 border border-aquatech-blue/20 flex items-center justify-center hover:bg-aquatech-blue hover:text-white transition-all square-border">
-                            <ShoppingCart size={14} />
-                          </Link>
-                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                      <div className="p-6 flex flex-col flex-1">
+                         <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest mb-2">{product.code}</span>
+                         <h4 className="text-[13px] font-black text-black uppercase tracking-tight leading-tight mb-8 group-hover:text-aquatech-blue transition-colors">
+                           {product.name}
+                         </h4>
+                         
+                         <div className="mt-auto pt-6 border-t border-gray-50 flex items-center justify-between">
+                            <div className="flex flex-col text-left">
+                              {product.promoPrice && (
+                                <span className="text-[9px] text-gray-300 line-through font-bold">USD {isMounted ? product.promoPrice.toLocaleString() : product.promoPrice}</span>
+                              )}
+                              <span className="text-[16px] font-black text-aquatech-blue tracking-tighter">USD {isMounted ? product.price.toLocaleString() : product.price}</span>
+                            </div>
+                            <Link href="/contacto" className="w-10 h-10 border border-aquatech-blue/20 flex items-center justify-center hover:bg-aquatech-blue hover:text-white transition-all square-border">
+                              <ShoppingCart size={14} />
+                            </Link>
+                         </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
             ) : (
               <div className="py-32 text-center bg-[#F9FAFB] border-2 border-dashed border-gray-100">
                  <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.5em]">No hay resultados específicos.</p>

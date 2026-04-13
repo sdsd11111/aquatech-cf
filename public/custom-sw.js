@@ -1,7 +1,7 @@
 // ============================================================
 // Aquatech CRM — Custom Service Worker (Offline-First) v14
 // ============================================================
-const CACHE_VERSION = 'v32';
+const CACHE_VERSION = 'v33';
 const STATIC_CACHE = `aquatech-static-${CACHE_VERSION}`;
 const PAGES_CACHE  = `aquatech-pages-${CACHE_VERSION}`;
 const ASSETS_CACHE = `aquatech-assets-${CACHE_VERSION}`;
@@ -519,12 +519,12 @@ self.addEventListener('push', (event) => {
     body: data.body || 'Nueva actualización en tu proyecto',
     icon: data.icon || '/icon-192.png',
     badge: data.badge || '/icon-192.png',
-    vibrate: [200, 100, 200, 100, 200],
+    vibrate: [300, 100, 300, 100, 400, 100, 500, 100, 800, 100, 800, 100], // Aggressive pattern to wake device
     tag: data.tag || 'general',
-    renotify: true,
-    requireInteraction: true, // Persist until user clicks or dismisses
-    silent: false,           // Ensure sound is not suppressed
-    priority: 'high',        // Signal high priority to OS
+    renotify: true,           // Important for same-tag notifications to re-trigger alert
+    requireInteraction: true, // Persist on lock screen until swiped/opened
+    silent: false,
+    timestamp: Date.now(),    // Help OS order and prioritize
     data: {
       url: data.url || '/admin/operador',
       timestamp: Date.now()

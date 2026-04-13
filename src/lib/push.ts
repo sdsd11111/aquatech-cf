@@ -36,6 +36,8 @@ export async function sendPushToUser(userId: number, payload: PushPayload) {
       badge: payload.badge || '/icon-192.png',
       url: payload.url || '/admin/operador',
       tag: payload.tag || 'general',
+      vibrate: [300, 100, 300, 100, 400],
+      renotify: true
     })
 
     const results = await Promise.allSettled(
