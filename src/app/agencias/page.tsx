@@ -11,7 +11,7 @@ import ScrollToTop from '@/components/marketing/ScrollToTop'
 
 export default function AgenciasPage() {
   return (
-    <main className="bg-white min-h-screen pt-[180px] md:pt-[280px]">
+    <main className="bg-white min-h-screen overflow-x-hidden">
       <style dangerouslySetInnerHTML={{ __html: `
         .aq-central-container {
           max-width: 1440px;
@@ -39,15 +39,22 @@ export default function AgenciasPage() {
         }
       `}} />
 
-      {/* Header section with even more internal padding */}
-      <header className="pb-12 md:pb-24 bg-white border-b border-gray-100">
+      {/* 
+          PHYSICAL SPACER: This forces the content down regardless of fixed/absolute navbar positioning.
+          We use a hardcoded height to ensure it is always applied correctly.
+      */}
+      <div style={{ height: '140px' }} className="block md:hidden" />
+      <div style={{ height: '260px' }} className="hidden md:block" />
+
+      {/* Header section with clean background */}
+      <header className="pb-16 md:pb-32 bg-white">
         <div className="aq-central-container">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <h1 className="text-4xl md:text-[84px] font-black text-black leading-[0.9] tracking-tighter uppercase mb-6">
+            <h1 className="text-4xl md:text-[84px] font-black text-black leading-[0.9] tracking-tighter uppercase mb-8">
               Agencias de <span className="text-aquatech-blue">Aquatech.</span>
             </h1>
             <p className="text-lg md:text-xl text-gray-500 max-w-2xl font-medium leading-relaxed">

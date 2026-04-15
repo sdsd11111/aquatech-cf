@@ -65,14 +65,28 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, description, startTime, endTime, userId, projectId } = body
+    const { title, description, startTime, endTime, userId, userIds, projectId } = body
 
-    // Logic: Only Admins can assign to others. Operators can only create for themselves?
-    // For now, let's allow it if it's the user's ID or if they are admin.
     const isAdmin = checkIsAdmin((session.user as any).role)
     
-    if (!isAdmin && Number(userId) !== Number(session.user.id)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    // Determine target user IDs
+    let targetUserIds: number[] = []
+    if (isAdmin && userIds && Array.isArray(userIds) && userIds.length > 0) {
+      targetUserIds = userIds.map((id: any) => Number(id))
+    } else if (userId) {
+      targetUserIds = [Number(userId)]
+    }
+
+    if (targetUserIds.length === 0) {
+      return NextResponse.json({ error: 'Se requiere al menos un operador' }, { status: 400 })
+    }
+
+    // Non-admins can only assign to themselves
+    if (!isAdmin) {
+      const selfId = Number(session.user.id)
+      if (targetUserIds.length !== 1 || targetUserIds[0] !== selfId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const start = new Date(forceEcuadorTZ(startTime))
@@ -81,46 +95,74 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'La fecha de fin debe ser posterior a la de inicio' }, { status: 400 })
     }
 
-    const appointment = await prisma.appointment.create({
-      data: {
-        title,
-        description,
-        startTime: start,
-        endTime: end,
-        userId: Number(userId),
-        projectId: projectId ? Number(projectId) : null,
-      },
-      include: {
-        project: { select: { title: true } },
-        user: { select: { id: true, name: true, phone: true } }
-      }
-    })
-
-    // NOTIFICACIÓN AUTOMÁTICA: Si hay un número de teléfono, enviar aviso de nueva tarea
-    if (appointment.user?.phone) {
-      const startTimeLocale = formatTimeEcuador(startTime);
-      const startDateLocale = formatDateEcuador(startTime);
-      const descrText = description ? `\n📝 *Nota / Instrucción:*\n${description}` : '';
-      
-      const message = `*Notificación Aquatech*\n\nHola ${appointment.user.name}, tienes una *nueva tarea* asignada:\n📌 *${title}*\n📅 Fecha: ${startDateLocale}\n⏰ Hora: ${startTimeLocale}${descrText}\n\nConsulta más detalles en tu perfil.`;
-      
-      // Enviamos de forma asíncrona para no bloquear la respuesta de la API
-      sendWhatsAppMessage(appointment.user.phone, message).catch(err => {
-        console.error('Error enviando notificación WA de nueva tarea:', err);
-      });
+    // PASO 1: Crear todas las citas primero
+    const results: any[] = []
+    for (const targetUserId of targetUserIds) {
+      const appointment = await prisma.appointment.create({
+        data: {
+          title,
+          description,
+          startTime: start,
+          endTime: end,
+          userId: targetUserId,
+          projectId: projectId ? Number(projectId) : null,
+        },
+        include: {
+          project: { select: { title: true } },
+          user: { select: { id: true, name: true, phone: true } }
+        }
+      })
+      results.push(appointment)
     }
 
-    // 🔔 Push Notification to the assigned operator
-    const startLocale = formatTimeEcuador(startTime)
-    notifyUser(
-      Number(userId),
-      '📌 Nueva Tarea Asignada',
-      `${title} — ${startLocale}`,
-      `/admin/operador`,
-      `task-${appointment.id}`
-    )
+    // Responder inmediatamente al cliente para no bloquearlo
+    const response = NextResponse.json(results.length === 1 ? results[0] : results)
 
-    return NextResponse.json(appointment)
+    // PASO 2: Enviar notificaciones SECUENCIALMENTE después de crear las citas
+    // Usar setImmediate-like pattern para no bloquear la response
+    const sendNotifications = async () => {
+      for (let i = 0; i < results.length; i++) {
+        const appointment = results[i]
+
+        // 🔔 Push Notification (instantánea, no depende de API externa)
+        const startLocale = formatTimeEcuador(startTime)
+        notifyUser(
+          appointment.userId,
+          '📌 Nueva Tarea Asignada',
+          `${title} — ${startLocale}`,
+          `/admin/operador`,
+          `task-${appointment.id}`
+        )
+
+        // 📱 WhatsApp: enviar CON await para respetar rate limits de Evolution API
+        if (appointment.user?.phone) {
+          try {
+            const startTimeLocale = formatTimeEcuador(startTime);
+            const startDateLocale = formatDateEcuador(startTime);
+            const descrText = description ? `\n📝 *Nota / Instrucción:*\n${description}` : '';
+            
+            const message = `*Notificación Aquatech*\n\nHola ${appointment.user.name}, tienes una *nueva tarea* asignada:\n📌 *${title}*\n📅 Fecha: ${startDateLocale}\n⏰ Hora: ${startTimeLocale}${descrText}\n\nConsulta más detalles en tu perfil.`;
+            
+            await sendWhatsAppMessage(appointment.user.phone, message);
+            console.log(`✅ WA enviado a ${appointment.user.name} (${appointment.user.phone})`);
+          } catch (err) {
+            console.error(`❌ Error enviando WA a ${appointment.user.name}:`, err);
+          }
+
+          // Delay de 1.5s entre envíos para respetar rate-limit de Evolution API
+          if (i < results.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          }
+        }
+      }
+    }
+
+    // Lanzar notificaciones sin bloquear la respuesta HTTP
+    sendNotifications().catch(err => {
+      console.error('Error global en notificaciones:', err);
+    })
+
+    return response
   } catch (error) {
     console.error('Error creating appointment:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

@@ -41,7 +41,8 @@ export default function CalendarView({
     const lastDay = new Date(year, month + 1, 0)
     
     const days = []
-    let startDay = firstDay.getDay()
+    // Convert Sunday=0 to Monday-based: Mon=0, Tue=1, ..., Sun=6
+    let startDay = (firstDay.getDay() + 6) % 7
     for (let i = 0; i < startDay; i++) {
         days.push(null)
     }
@@ -55,7 +56,8 @@ export default function CalendarView({
   const weekDays = useMemo(() => {
     const startOfWeek = new Date(currentDate)
     const day = startOfWeek.getDay()
-    const diff = startOfWeek.getDate() - day // Start on Sunday
+    // Monday-based: if Sunday (0), go back 6 days; otherwise go back (day-1)
+    const diff = startOfWeek.getDate() - ((day + 6) % 7)
     startOfWeek.setDate(diff)
     
     const days = []
@@ -97,31 +99,29 @@ export default function CalendarView({
   return (
     <div className="calendar-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <h2 style={{ margin: 0, textTransform: 'capitalize', fontSize: '1.25rem', color: 'var(--text)' }}>
+      <div className="cal-toolbar">
+        <div className="cal-toolbar-left">
+          <h2 className="cal-title">
             {viewMode === 'MONTH' ? monthName : `Semana de ${formatToEcuador(weekDays[0], { day: 'numeric', month: 'short' })}`}
           </h2>
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div className="cal-nav">
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('PREV')}><ChevronLeft size={18}/></button>
             <button className="btn btn-ghost btn-sm" onClick={() => setCurrentDate(getLocalNow())}>Hoy</button>
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('NEXT')}><ChevronRight size={18}/></button>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <div style={{ display: 'flex', backgroundColor: 'var(--bg-deep)', borderRadius: 'var(--radius-md)', padding: '4px' }}>
+        <div className="cal-toolbar-right">
+          <div className="cal-view-toggle">
             <button 
               className={`btn btn-sm ${viewMode === 'MONTH' ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setViewMode('MONTH')}
-              style={{ padding: '6px 12px' }}
             >
               Mes
             </button>
             <button 
               className={`btn btn-sm ${viewMode === 'WEEK' ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setViewMode('WEEK')}
-              style={{ padding: '6px 12px' }}
             >
               Semana
             </button>
@@ -134,131 +134,265 @@ export default function CalendarView({
         </div>
       </div>
 
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(7, 1fr)', 
-        gap: '1px', 
-        backgroundColor: 'var(--border)', 
-        borderRadius: 'var(--radius-lg)', 
-        overflow: 'hidden',
-        border: '1px solid var(--border)' 
-      }}>
-        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
-          <div key={d} className="calendar-header-cell" style={{ backgroundColor: 'var(--bg-deep)', padding: '10px', textAlign: 'center', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-            <span className="full-day">{d}</span>
-            <span className="short-day">{d[0]}</span>
-          </div>
-        ))}
-
-        {(viewMode === 'MONTH' ? daysInMonth : weekDays).map((day, idx) => {
-          const dayEvents = getEventsForDay(day as Date)
-          const isToday = day && day.toDateString() === getLocalNow().toDateString()
-          const isDifferentMonth = day && day.getMonth() !== currentDate.getMonth()
-
-          return (
-            <div 
-              key={idx} 
-              style={{ 
-                backgroundColor: day ? 'var(--bg-card)' : 'transparent', 
-                minHeight: viewMode === 'MONTH' ? '120px' : '300px',
-                padding: '8px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-                opacity: isDifferentMonth ? 0.4 : 1,
-                cursor: day && isAdmin ? 'pointer' : 'default',
-                transition: 'background var(--transition-fast)'
-              }}
-              onClick={() => day && isAdmin && onAddEvent(day)}
-              className={day ? 'calendar-cell' : ''}
-            >
-              {day && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span className="day-number" style={{ 
-                    fontSize: '0.85rem', 
-                    fontWeight: isToday ? 800 : 500, 
-                    color: isToday ? 'var(--primary)' : 'var(--text)',
-                    width: '24px',
-                    height: '24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: '50%',
-                    backgroundColor: isToday ? 'var(--primary-glow)' : 'transparent'
-                  }}>
-                    {day.getDate()}
-                  </span>
-                </div>
-              )}
-
-              <div className="day-events-container" style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflowY: 'auto', flex: 1 }}>
-                {dayEvents.map(event => (
-                  <button 
-                    key={event.id}
-                    onClick={(e) => { e.stopPropagation(); onEditEvent(event); }}
-                    className="event-pill"
-                    style={{ 
-                        display: 'flex', 
-                        flexDirection: 'column',
-                        textAlign: 'left',
-                        padding: '6px 8px', 
-                        borderRadius: 'var(--radius-sm)', 
-                        fontSize: '0.75rem', 
-                        backgroundColor: 'var(--bg-surface)', 
-                        borderLeft: `3px solid ${statusColors[event.status]}`,
-                        color: 'var(--text)',
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'transform 0.2s ease',
-                        boxShadow: 'var(--shadow-sm)'
-                    }}
-                  >
-                    <div className="event-title" style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.title}</div>
-                    <div className="event-time" style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                        {formatTimeEcuador(event.startTime)}
-                    </div>
-                  </button>
-                ))}
-              </div>
+      <div className="calendar-grid-wrapper">
+        <div className="calendar-grid">
+          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
+            <div key={d} className="calendar-header-cell">
+              <span className="full-day">{d}</span>
+              <span className="short-day">{d[0]}</span>
             </div>
-          )
-        })}
+          ))}
+
+          {(viewMode === 'MONTH' ? daysInMonth : weekDays).map((day, idx) => {
+            const dayEvents = getEventsForDay(day as Date)
+            const isToday = day && day.toDateString() === getLocalNow().toDateString()
+            const isDifferentMonth = day && day.getMonth() !== currentDate.getMonth()
+
+            return (
+              <div 
+                key={idx} 
+                className={`calendar-day-cell ${day ? 'calendar-cell' : 'calendar-empty'} ${isToday ? 'is-today' : ''} ${isDifferentMonth ? 'is-diff-month' : ''} ${viewMode === 'WEEK' ? 'week-cell' : 'month-cell'}`}
+                onClick={() => day && isAdmin && onAddEvent(day)}
+              >
+                {day && (
+                  <div className="day-header">
+                    <span className={`day-number ${isToday ? 'today' : ''}`}>
+                      {day.getDate()}
+                    </span>
+                  </div>
+                )}
+
+                <div className="day-events-container">
+                  {dayEvents.map(event => (
+                    <button 
+                      key={event.id}
+                      onClick={(e) => { e.stopPropagation(); onEditEvent(event); }}
+                      className="event-pill"
+                      style={{ borderLeft: `3px solid ${statusColors[event.status]}` }}
+                    >
+                      <div className="event-title">{event.title}</div>
+                      <div className="event-time">
+                          {formatTimeEcuador(event.startTime)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <style jsx>{`
-        .calendar-cell:hover {
-            background-color: var(--bg-card-hover) !important;
+        /* ========== TOOLBAR ========== */
+        .cal-toolbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: var(--space-md);
+          flex-wrap: wrap;
+          gap: 0.75rem;
+        }
+        .cal-toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        .cal-title {
+          margin: 0;
+          text-transform: capitalize;
+          font-size: 1.25rem;
+          color: var(--text);
+        }
+        .cal-nav {
+          display: flex;
+          gap: 4px;
+        }
+        .cal-toolbar-right {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .cal-view-toggle {
+          display: flex;
+          background: var(--bg-deep);
+          border-radius: var(--radius-md);
+          padding: 4px;
+        }
+        .calendar-grid-wrapper {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .calendar-grid {
+          display: grid;
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          gap: 1px;
+          background: var(--border);
+          border-radius: var(--radius-lg);
+          overflow: hidden;
+          border: 1px solid var(--border);
+          min-width: 0;
+        }
+        .calendar-header-cell {
+          background: var(--bg-deep);
+          padding: 10px;
+          text-align: center;
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: var(--text-muted);
+          text-transform: uppercase;
         }
         .short-day { display: none; }
+
+        /* ========== DAY CELLS ========== */
+        .calendar-day-cell {
+          background: var(--bg-card);
+          padding: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          cursor: default;
+          transition: background var(--transition-fast);
+        }
+        .calendar-cell {
+          cursor: pointer;
+        }
+        .calendar-cell:hover {
+          background: var(--bg-card-hover) !important;
+        }
+        .calendar-empty {
+          background: transparent;
+        }
+        .is-diff-month {
+          opacity: 0.4;
+        }
+        .month-cell {
+          min-height: 120px;
+        }
+        .week-cell {
+          min-height: 300px;
+        }
+
+        /* ========== DAY HEADER ========== */
+        .day-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 4px;
+        }
+        .day-number {
+          font-size: 0.85rem;
+          font-weight: 500;
+          color: var(--text);
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+        }
+        .day-number.today {
+          font-weight: 800;
+          color: var(--primary);
+          background: var(--primary-glow);
+        }
+
+        /* ========== EVENT PILLS ========== */
+        .day-events-container {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          overflow-y: auto;
+          flex: 1;
+        }
+        .event-pill {
+          display: flex;
+          flex-direction: column;
+          text-align: left;
+          padding: 6px 8px;
+          border-radius: var(--radius-sm);
+          font-size: 0.75rem;
+          background: var(--bg-surface);
+          color: var(--text);
+          border: none;
+          cursor: pointer;
+          transition: transform 0.2s ease;
+          box-shadow: var(--shadow-sm);
+        }
+        .event-title {
+          font-weight: 700;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .event-time {
+          font-size: 0.65rem;
+          color: var(--text-muted);
+        }
+
+        /* ========== MOBILE ========== */
         @media (max-width: 768px) {
-            .calendar-container {
-                gap: var(--space-xs) !important;
-            }
-            .full-day { display: none; }
-            .short-day { display: inline; }
-            .calendar-header-cell {
-                padding: 6px !important;
-                font-size: 0.65rem !important;
-            }
-            .calendar-cell {
-                min-height: 80px !important;
-                padding: 4px !important;
-            }
-            .day-number {
-                width: 20px !important;
-                height: 20px !important;
-                font-size: 0.75rem !important;
-            }
-            .event-pill {
-                padding: 3px 4px !important;
-                font-size: 0.6rem !important;
-            }
-            .event-time {
-                display: none;
-            }
-            .event-title {
-                font-size: 0.55rem;
-            }
+          .calendar-container {
+            gap: var(--space-xs) !important;
+          }
+          .cal-toolbar {
+            gap: 0.5rem;
+          }
+          .cal-toolbar-left {
+            gap: 0.4rem;
+            width: 100%;
+            justify-content: space-between;
+          }
+          .cal-title {
+            font-size: 0.9rem;
+          }
+          .cal-toolbar-right {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .calendar-grid-wrapper {
+            overflow-x: visible;
+          }
+          .calendar-grid {
+            border-radius: var(--radius-md);
+          }
+          .full-day { display: none; }
+          .short-day { display: inline; }
+          .calendar-header-cell {
+            padding: 5px 2px;
+            font-size: 0.6rem;
+          }
+          .calendar-day-cell {
+            padding: 3px;
+          }
+          .month-cell {
+            min-height: 55px;
+          }
+          .week-cell {
+            min-height: 80px;
+          }
+          .day-header {
+            margin-bottom: 2px;
+          }
+          .day-number {
+            width: 18px;
+            height: 18px;
+            font-size: 0.65rem;
+          }
+          .event-pill {
+            padding: 2px 3px;
+            font-size: 0.55rem;
+          }
+          .event-time {
+            display: none;
+          }
+          .event-title {
+            font-size: 0.5rem;
+          }
+          .day-events-container {
+            gap: 2px;
+          }
         }
       `}</style>
     </div>

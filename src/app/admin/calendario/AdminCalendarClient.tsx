@@ -44,10 +44,17 @@ export default function AdminCalendarClient({ operators, projects }: AdminCalend
     const isNew = !data.id
     const url = isNew ? '/api/appointments' : `/api/appointments/${data.id}`
     const method = isNew ? 'POST' : 'PATCH'
+
+    // Build payload — include userIds for multi-assignment on create
+    const payload: any = { ...data }
+    if (isNew && data.userIds && Array.isArray(data.userIds)) {
+      payload.userIds = data.userIds
+    }
+
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     })
     if (res.ok) {
       setIsModalOpen(false)

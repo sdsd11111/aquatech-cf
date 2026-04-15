@@ -45,6 +45,7 @@ export default function MediaCapture({
   const timerRef = useRef<any>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const [isStreamActive, setIsStreamActive] = useState(false)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const [cameraSubMode, setCameraSubMode] = useState<'photo' | 'video'>('photo')
   const chunksRef = useRef<Blob[]>([])
@@ -83,12 +84,14 @@ export default function MediaCapture({
         video: (mode === 'video' || mode === 'photo') ? { facingMode } : false
       })
       streamRef.current = newStream
+      setIsStreamActive(true)
       if (videoRef.current) {
         videoRef.current.srcObject = newStream
         videoRef.current.play().catch(() => {})
       }
     } catch (err) {
       console.error('Error starting camera stream:', err)
+      setIsStreamActive(false)
     }
   }
 
@@ -339,18 +342,19 @@ export default function MediaCapture({
             position: 'relative', 
             margin: '0 auto' 
           }}>
-            {/* Live preview during recording */}
+            {/* Live preview during recording or before */}
             <video 
               ref={videoRef} 
               autoPlay 
               muted 
               playsInline 
               style={{ 
-                display: isRecording ? 'block' : 'none', 
+                display: (isRecording || isStreamActive) && !previewUrl ? 'block' : 'none', 
                 width: '100%', 
                 height: 'auto',
-                maxHeight: '200px',
-                objectFit: 'cover' 
+                maxHeight: '220px',
+                objectFit: 'cover',
+                backgroundColor: '#000'
               }} 
             />
             {/* Playback after recording - with duration info */}

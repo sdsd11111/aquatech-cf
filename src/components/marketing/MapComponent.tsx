@@ -52,23 +52,22 @@ function ChangeView({ center, zoom, isInitial }: { center: [number, number], zoo
 
 export default function MapComponent({ locations, selectedId }: MapComponentProps) {
   const [isInitial, setIsInitial] = useState(true)
-  const [ecuadorZoom, setEcuadorZoom] = useState(7.5)
+  const [ecuadorZoom, setEcuadorZoom] = useState(6.5)
 
   useEffect(() => {
     if (selectedId !== null) {
       setIsInitial(false)
     }
 
-    // Adjust initial zoom for "Solo Ecuador" focus
+    // Zoom level 6.5 as requested ("poquito mas alejado")
     const handleResize = () => {
-      setEcuadorZoom(window.innerWidth < 1024 ? 6.5 : 7.5)
+      setEcuadorZoom(window.innerWidth < 1024 ? 5.5 : 6.5)
     }
     handleResize()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [selectedId])
 
-  // Precise coordinate for visual Ecuador center
   const ecuadorCenter: [number, number] = [-1.45, -78.4]
 
   const selectedLoc = locations.find(l => l.id === selectedId) || null
