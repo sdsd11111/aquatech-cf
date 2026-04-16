@@ -1,17 +1,39 @@
-import { PrismaClient } from '@prisma/client/edge'
-import { withAccelerate } from '@prisma/extension-accelerate'
+import { PrismaClient } from '@prisma/client'
+import { PrismaMariaDB } from '@prisma/adapter-mariadb'
+import mariadb from 'mariadb'
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createPrismaClient> | undefined
+  prisma: PrismaClient | undefined
 }
 
-function createPrismaClient() {
-  return new PrismaClient().$extends(withAccelerate())
+const createPrismaClient = () => {
+  // If we are in the Edge runtime (Cloudflare Workers/Pages)
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    const connectionString = process.env.DATABASE_URL
+    
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is not defined')
+    }
+
+    // Configure the MariaDB pool without SSL to bypass the certificate issues
+    const pool = mariadb.createPool({
+      connectionString: connectionString,
+      ssl: false, // <-- KEY: Skip SSL verification
+      connectTimeout: 20000,
+      waitForConnections: true,
+      connectionLimit: 10
+    })
+
+    const adapter = new PrismaMariaDB(pool)
+    return new PrismaClient({ adapter })
+  }
+
+  // Local development or non-edge environment
+  return new PrismaClient()
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient()
 
-// Cache in ALL environments to prevent connection pool exhaustion
-if (!globalForPrisma.prisma) {
+if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma
 }
