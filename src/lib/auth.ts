@@ -12,51 +12,67 @@ export const authOptions: AuthOptions = {
         password: { label: 'Contraseña', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) return null
+        console.log('[AUTH] Authorize attempt for username:', credentials?.username);
+        
+        if (!credentials?.username || !credentials?.password) {
+          console.warn('[AUTH] Missing credentials');
+          return null;
+        }
 
         const usernameInput = (credentials?.username || '').trim()
         const password = credentials?.password || ''
 
-        const user = await prisma.user.findFirst({
-          where: { 
-            username: usernameInput
-          },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            username: true,
-            passwordHash: true,
-            isActive: true,
-            sessionVersion: true,
-            permissions: true,
-          } as any
-        }) as any
+        try {
+          console.log('[AUTH] Querying database for user...');
+          const user = await prisma.user.findFirst({
+            where: { 
+              username: usernameInput
+            },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              username: true,
+              passwordHash: true,
+              isActive: true,
+              sessionVersion: true,
+              permissions: true,
+            } as any
+          }) as any
 
-        if (!user) {
-          return null
-        }
+          if (!user) {
+            console.warn('[AUTH] User not found in database:', usernameInput);
+            return null
+          }
 
-        if (!user.isActive) {
-          return null
-        }
+          if (!user.isActive) {
+            console.warn('[AUTH] User is inactive:', usernameInput);
+            return null
+          }
 
-        const isValid = await bcrypt.compare(password, user.passwordHash)
-        
-        if (!isValid) {
-          return null
-        }
+          console.log('[AUTH] User found, comparing password...');
+          const isValid = await bcrypt.compare(password, user.passwordHash)
+          
+          if (!isValid) {
+            console.warn('[AUTH] Invalid password for user:', usernameInput);
+            return null
+          }
 
+          console.log('[AUTH] Login successful for:', usernameInput);
 
-        return {
-          id: String(user.id),
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          username: user.username,
-          sessionVersion: user.sessionVersion,
-          permissions: user.permissions,
+          return {
+            id: String(user.id),
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            username: user.username,
+            sessionVersion: user.sessionVersion,
+            permissions: user.permissions,
+          }
+        } catch (error) {
+          console.error('[AUTH] Critical error during authorize:', error);
+          throw error;
         }
       },
     }),
