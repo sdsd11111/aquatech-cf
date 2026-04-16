@@ -15,11 +15,9 @@ const createPrismaClient = () => {
       throw new Error('DATABASE_URL is not defined')
     }
 
-    // Configure the MariaDB pool. 
-    // By default, it won't use SSL unless specified in the URL.
-    const pool = mariadb.createPool(connectionString)
-
-    const adapter = new PrismaMariaDb(pool)
+    // Initialize the MariaDB adapter by passing the connection string directly.
+    // This allows the adapter to manage the pool internally and solves typing issues.
+    const adapter = new PrismaMariaDb(connectionString)
     return new PrismaClient({ adapter })
   }
 
