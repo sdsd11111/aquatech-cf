@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const context = {
       currentDate: formatToEcuador(referenceDate),
       operators: operators.map(o => `ID: ${o.id} | Nombre: ${o.name}`),
-      appointments: appointments.map(a => `- ${a.user.name}: ${a.title} (${formatToEcuador(a.startTime)})`)
+      appointments: appointments.map((a: any) => `- ${a.user?.name || 'Usuario'}: ${a.title} (${formatToEcuador(a.startTime)})`)
     }
 
     // API Keys

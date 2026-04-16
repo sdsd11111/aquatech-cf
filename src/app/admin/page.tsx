@@ -140,8 +140,8 @@ export default async function AdminDashboard() {
     amount: Number(e.amount),
     description: e.description,
     date: e.createdAt.toISOString(),
-    projectTitle: e.project.title,
-    userName: e.user.name,
+    projectTitle: (e as any).project.title,
+    userName: (e as any).user.name,
   }))
 
   const serializedMessages = recentMessages.map((m) => ({
@@ -149,33 +149,33 @@ export default async function AdminDashboard() {
     content: m.content,
     type: m.type,
     createdAt: m.createdAt.toISOString(),
-    projectTitle: m.project.title,
-    userName: m.user.name,
-    phaseTitle: m.phase?.title || null,
+    projectTitle: (m as any).project.title,
+    userName: (m as any).user.name,
+    phaseTitle: (m as any).phase?.title || null,
   }))
 
   const serializedProjects = projectsList.map((p) => {
-    const totalExpenses = p.expenses.reduce((sum, e) => sum + Number(e.amount), 0)
+    const totalExpenses = (p as any).expenses.reduce((sum: any, e: any) => sum + Number(e.amount), 0)
     const estimatedBudget = Number((p as any).estimatedBudget || 0)
     
     // Calculate days
-    const totalEstimatedDays = p.phases.reduce((sum, ph) => sum + Number(ph.estimatedDays || 0), 0)
+    const totalEstimatedDays = (p as any).phases.reduce((sum: any, ph: any) => sum + Number(ph.estimatedDays || 0), 0)
     
     return {
       id: p.id,
       title: p.title,
       type: p.type as string,
       status: p.status as string,
-      clientName: p.client?.name || 'Sin cliente',
-      phasesTotal: p.phases.length,
-      phasesCompleted: p.phases.filter((ph) => ph.status === 'COMPLETADA').length,
-      teamMembers: p.team.map((t) => t.user.name),
-      expenseCount: p._count.expenses,
+      clientName: (p as any).client?.name || 'Sin cliente',
+      phasesTotal: (p as any).phases.length,
+      phasesCompleted: (p as any).phases.filter((ph: any) => ph.status === 'COMPLETADA').length,
+      teamMembers: (p as any).team.map((t: any) => t.user.name),
+      expenseCount: (p as any)._count.expenses,
       // Meta for bars
       estimatedBudget,
       realCost: totalExpenses,
       estimatedDays: totalEstimatedDays,
-      phases: p.phases.map(ph => ({
+      phases: (p as any).phases.map((ph: any) => ({
         id: ph.id,
         title: ph.title,
         status: ph.status,
@@ -189,7 +189,7 @@ export default async function AdminDashboard() {
     name: u.name,
     role: u.role,
     phone: u.phone,
-    projectCount: u._count.projectTeams
+    projectCount: (u as any)._count.projectTeams
   }))
 
   return (

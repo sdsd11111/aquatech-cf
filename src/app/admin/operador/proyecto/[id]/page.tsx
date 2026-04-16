@@ -31,7 +31,7 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
   })
 
   // If project doesn't exist or user not in team, back to dashboard
-  const isInTeam = project?.team.some((t: any) => t.userId === userId)
+  const isInTeam = (project as any)?.team.some((t: any) => t.userId === userId)
   if (!project || !isInTeam) {
     redirect('/admin/operador')
   }
@@ -79,7 +79,7 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
 
   // Combine direct gallery uploads and chat media into a unified gallery with unique IDs
   const unifiedGallery = [
-    ...(project.gallery || []),
+    ...(project as any).gallery || [],
     ...(chatMessages.flatMap((m: any) => m.media || []).map((m: any) => ({
       ...m,
       isFromChat: true
@@ -88,17 +88,17 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
 
   // Manually build safe objects to ensure correct types and field names
   const safeProject = {
-    id: project.id,
-    title: project.title,
-    status: project.status,
-    address: project.address || project.client?.address,
-    phases: project.phases.map(p => ({
+    id: (project as any).id,
+    title: (project as any).title,
+    status: (project as any).status,
+    address: (project as any).address || (project as any).client?.address,
+    phases: (project as any).phases.map((p: any) => ({
       id: p.id,
       title: p.title,
       status: p.status,
       description: p.description
     })),
-    team: project.team.map(t => ({
+    team: (project as any).team.map((t: any) => ({
       id: t.userId,
       name: t.user.name,
       role: t.user.role
@@ -118,17 +118,17 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
     content: msg.content,
     type: msg.type,
     createdAt: msg.createdAt.toISOString(),
-    userName: msg.user.name,
+    userName: (msg as any).user.name,
     isMe: msg.userId === userId,
-    media: msg.media,
+    media: (msg as any).media,
     extraData: msg.extraData
   }))
 
   const safeRecord = globalActiveRecord ? { 
     id: globalActiveRecord.id, 
-    projectId: globalActiveRecord.projectId,
-    projectName: globalActiveRecord.project.title,
-    startTime: globalActiveRecord.startTime.toISOString() 
+    projectId: (globalActiveRecord as any).projectId,
+    projectName: (globalActiveRecord as any).project.title,
+    startTime: (globalActiveRecord as any).startTime.toISOString() 
   } : null
 
   const safeExpenses = myExpenses.map(e => ({ 
@@ -149,9 +149,9 @@ export default async function OperatorProjectDetail({ params }: { params: Promis
           activeRecord: safeRecord, // Renamed but serves as "my current active session"
           expenses: safeExpenses,
           userId: userId,
-          clientName: project.client?.name || 'Cliente sin nombre',
-          projectAddress: project.address || project.client?.address || '',
-          projectCity: project.client?.city || '',
+          clientName: (project as any).client?.name || 'Cliente sin nombre',
+          projectAddress: (project as any).address || (project as any).client?.address || '',
+          projectCity: (project as any).client?.city || '',
           panelBase: "/admin/operador"
         })}
       />

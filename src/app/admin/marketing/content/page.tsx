@@ -84,7 +84,7 @@ export default async function ContentPipelinesPage() {
                   <div style={{ display: 'flex', gap: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                     <span>Creado el {formatDateEcuador(pipeline.createdAt)}</span>
                     <span>Estado: <span className="badge" style={{ background: 'var(--primary-color)', color: 'white', borderRadius: '4px', padding: '0.2rem 0.5rem' }}>{pipeline.status}</span></span>
-                    <span>Autor: {pipeline.createdBy?.name || 'Usuario'}</span>
+                    <span>Autor: {(pipeline as any).createdBy?.name || 'Usuario'}</span>
                   </div>
                 </div>
                 <div>

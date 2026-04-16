@@ -70,14 +70,14 @@ export async function GET(
     // Format the response
     const formattedUser = {
       ...user,
-      projects: user.projectTeams.map((pt: any) => ({
+      projects: (user as any).projectTeams.map((pt: any) => ({
         ...pt.project,
         assignedAt: pt.assignedAt
       })),
       stats: {
-        totalMessages: user._count.chatMessages,
-        totalExpenses: user._count.expenses,
-        totalDayRecords: user._count.dayRecords
+        totalMessages: (user as any)._count.chatMessages,
+        totalExpenses: (user as any)._count.expenses,
+        totalDayRecords: (user as any)._count.dayRecords
       }
     }
 

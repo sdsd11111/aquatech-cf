@@ -53,11 +53,11 @@ export async function GET(request: Request) {
         }
       });
 
-      for (const op of operatorsWithTasks) {
+      for (const op of operatorsWithTasks as any[]) {
         if (op.phone && op.appointments.length > 0) {
           let summary = `📋 *Resumen del Día - Aquatech*\n\nHola *${op.name}*, hoy tienes *${op.appointments.length}* tareas asignadas:\n\n`;
           
-          op.appointments.forEach((apt, idx) => {
+          op.appointments.forEach((apt: any, idx: number) => {
             const time = formatTimeEcuador(apt.startTime);
             const date = formatDateEcuador(apt.startTime);
             const descrText = apt.description ? `\n   📝 *Nota:* ${apt.description}` : '';

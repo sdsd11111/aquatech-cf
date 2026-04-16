@@ -49,7 +49,7 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
   if (!project) notFound()
 
   // Guard: Admin, Creator or Team Member
-  if (!canAccessProject(session.user as any, project.team, project.createdBy ?? undefined)) {
+  if (!canAccessProject(session.user as any, (project as any).team, project.createdBy ?? undefined)) {
     redirect('/admin')
   }
 
@@ -77,7 +77,7 @@ export default async function ProyectoDetallePage({ params }: { params: Promise<
   })
 
   // Serialize to plain JSON to handle Prisma Decimal objects
-  const serializedProject = JSON.parse(JSON.stringify(project))
+  const serializedProject = JSON.parse(JSON.stringify(project as any))
 
   return <ProjectDetailClient project={serializedProject} availableOperators={availableOperators} />
 }

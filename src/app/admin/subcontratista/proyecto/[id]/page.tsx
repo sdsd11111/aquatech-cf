@@ -30,7 +30,7 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
   })
 
   // If project doesn't exist or user not in team, back to dashboard
-  const isInTeam = project?.team.some((t: any) => t.userId === userId)
+  const isInTeam = (project as any)?.team.some((t: any) => t.userId === userId)
   if (!project || !isInTeam) {
     redirect('/admin/subcontratista')
   }
@@ -77,8 +77,8 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
 
   // Combine direct gallery uploads and chat media into a unified gallery
   const unifiedGallery = [
-    ...(project.gallery || []),
-    ...(chatMessages.flatMap((m: any) => m.media || []).map((m: any) => ({
+    ...((project as any).gallery || []),
+    ...(chatMessages.flatMap((m: any) => (m as any).media || []).map((m: any) => ({
       ...m,
       isFromChat: true
     })))
@@ -89,14 +89,14 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
     id: project.id,
     title: project.title,
     status: project.status,
-    address: project.address || project.client?.address,
-    phases: project.phases.map(p => ({
+    address: project.address || (project as any).client?.address,
+    phases: (project as any).phases.map((p: any) => ({
       id: p.id,
       title: p.title,
       status: p.status,
       description: p.description
     })),
-    team: project.team.map(t => ({
+    team: (project as any).team.map((t: any) => ({
       id: t.userId,
       name: t.user.name,
       role: t.user.role
@@ -116,9 +116,9 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
     content: msg.content,
     type: msg.type,
     createdAt: msg.createdAt.toISOString(),
-    userName: msg.user.name,
+    userName: (msg as any).user.name,
     isMe: msg.userId === userId,
-    media: msg.media,
+    media: (msg as any).media,
     extraData: msg.extraData
   }))
 
@@ -142,9 +142,9 @@ export default async function SubcontratistaProjectDetail({ params }: { params: 
           activeRecord: safeRecord,
           expenses: safeExpenses,
           userId: userId,
-          clientName: project.client?.name || 'Cliente sin nombre',
-          projectAddress: project.address || project.client?.address || '',
-          projectCity: project.client?.city || '',
+          clientName: (project as any).client?.name || 'Cliente sin nombre',
+          projectAddress: (project as any).address || (project as any).client?.address || '',
+          projectCity: (project as any).client?.city || '',
           panelBase: "/admin/subcontratista"
         })}
       />

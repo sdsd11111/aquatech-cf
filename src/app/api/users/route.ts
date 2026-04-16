@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     })
 
     const formattedUsers = users.map(user => {
-      const activeCount = user.projectTeams.filter((pt: any) => pt.project?.status === 'ACTIVO').length
+      const activeCount = (user as any).projectTeams.filter((pt: any) => pt.project?.status === 'ACTIVO').length
       
       return {
         id: user.id,

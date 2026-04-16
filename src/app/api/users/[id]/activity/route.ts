@@ -60,32 +60,32 @@ export async function GET(
     // Unified timeline
     const timeline: any[] = []
 
-    chatMessages.forEach(msg => {
+    chatMessages.forEach((msg: any) => {
       timeline.push({
         type: 'CHAT_MESSAGE',
         timestamp: msg.createdAt,
         projectId: msg.projectId,
-        projectTitle: msg.project.title,
+        projectTitle: msg.project?.title || 'Proyecto',
         data: msg
       })
     })
 
-    expenses.forEach(exp => {
+    expenses.forEach((exp: any) => {
       timeline.push({
         type: 'EXPENSE',
         timestamp: exp.date,
         projectId: exp.projectId,
-        projectTitle: exp.project.title,
+        projectTitle: exp.project?.title || 'Proyecto',
         data: exp
       })
     })
 
-    dayRecords.forEach(rec => {
+    dayRecords.forEach((rec: any) => {
       timeline.push({
         type: 'ATTENDANCE',
         timestamp: rec.startTime,
         projectId: rec.projectId,
-        projectTitle: rec.project.title,
+        projectTitle: rec.project?.title || 'Proyecto',
         data: rec
       })
     })

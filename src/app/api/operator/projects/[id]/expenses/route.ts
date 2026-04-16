@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }
     })
 
-    const safeExpenses = expenses.map(e => ({
+    const safeExpenses = expenses.map((e: any) => ({
       id: e.id,
       description: e.description,
       amount: Number(e.amount),

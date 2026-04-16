@@ -50,3 +50,4 @@ next-env.d.ts
 MANUAL DE MARCA AQUATECH.pdf
 *.pdf
 /tmp-assets/
+/.open-next/
