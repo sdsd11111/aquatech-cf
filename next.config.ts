@@ -12,6 +12,7 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 const config: NextConfig = {
   // Fix: Force correct workspace root to prevent Client Component resolution errors
   outputFileTracingRoot: path.resolve(__dirname),
+  serverExternalPackages: ["@prisma/client", ".prisma/client"],
   images: {
     remotePatterns: [
       {
