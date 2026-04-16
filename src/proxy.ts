@@ -1,8 +1,6 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
-export const runtime = 'experimental-edge'
-
 export default withAuth(
   function middleware(req) {
     return NextResponse.next();
