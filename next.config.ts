@@ -29,6 +29,9 @@ const config: NextConfig = {
       },
     ],
   },
+  experimental: {
+    optimizePackageImports: ["lucide-react", "framer-motion"],
+  },
 };
 
 export default withPWA(config);
