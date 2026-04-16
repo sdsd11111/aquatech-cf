@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate --no-engine",
-    "build:cf": "opennextjs-cloudflare build",
+    "build:cf": "opennextjs-cloudflare build --minify",
     "deploy:cf": "opennextjs-cloudflare deploy"
   },
   "dependencies": {
