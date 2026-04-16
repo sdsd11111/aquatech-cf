@@ -1,12 +1,32 @@
 import webpush from 'web-push'
 import { prisma } from './prisma'
 
-// Configure VAPID details
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:aquatech@cesarreyesjaramillo.com',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
+// Configure VAPID details lazily or handle missing keys during build
+const configureVapid = () => {
+  const subject = process.env.VAPID_SUBJECT || 'mailto:aquatech@cesarreyesjaramillo.com';
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+  if (!publicKey || !privateKey) {
+    console.warn('[PUSH] VAPID keys are missing. Push notifications will not work.');
+    return false;
+  }
+
+  try {
+    webpush.setVapidDetails(subject, publicKey, privateKey);
+    return true;
+  } catch (error) {
+    console.error('[PUSH] Failed to set VAPID details:', error);
+    return false;
+  }
+};
+
+// Global flag to track if push is configured
+let isPushConfigured = false;
+if (typeof window === 'undefined') {
+  // Only try to configure on server-side
+  isPushConfigured = configureVapid();
+}
 
 interface PushPayload {
   title: string
@@ -22,6 +42,11 @@ interface PushPayload {
  * Automatically cleans up expired subscriptions (410 Gone).
  */
 export async function sendPushToUser(userId: number, payload: PushPayload) {
+  if (!isPushConfigured) {
+    console.warn('[PUSH] Skip sending: VAPID not configured');
+    return []
+  }
+
   try {
     const subs = await prisma.pushSubscription.findMany({
       where: { userId }
