@@ -16,6 +16,7 @@ export default withAuth(
           pathname.startsWith("/api/auth") ||
           pathname.startsWith("/api/upload") ||
           pathname.startsWith("/api/cron") ||
+          pathname.startsWith("/api/diag") ||
           pathname.startsWith("/_next") ||
           pathname === "/favicon.ico" ||
           pathname === "/manifest.json" ||
