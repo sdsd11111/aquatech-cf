@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaMariaDB } from '@prisma/adapter-mariadb'
+import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 import mariadb from 'mariadb'
 
 const globalForPrisma = globalThis as unknown as {
@@ -24,7 +24,7 @@ const createPrismaClient = () => {
       connectionLimit: 10
     })
 
-    const adapter = new PrismaMariaDB(pool)
+    const adapter = new PrismaMariaDb(pool)
     return new PrismaClient({ adapter })
   }
 
