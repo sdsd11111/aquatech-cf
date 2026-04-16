@@ -3,7 +3,15 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 
+// Cloudflare Edge Compatibility: Explicitly handle the secret
+const nextAuthSecret = process.env.NEXTAUTH_SECRET;
+
+if (!nextAuthSecret && typeof window === 'undefined') {
+  console.warn('[AUTH] WARNING: NEXTAUTH_SECRET is not defined in the environment!');
+}
+
 export const authOptions: AuthOptions = {
+  secret: nextAuthSecret,
   providers: [
     CredentialsProvider({
       name: 'Credentials',
