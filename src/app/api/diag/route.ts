@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 
-export const runtime = 'edge'; // Force edge runtime to match Cloudflare Worker
-
 export async function GET() {
   const dbUrl = process.env.DATABASE_URL || '';
   const isPrisma = dbUrl.startsWith('prisma://');
