@@ -1,5 +1,6 @@
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// Dynamic imports for heavy PDF libraries to reduce bundle size
+import type { jsPDF } from 'jspdf';
+// import autoTable from 'jspdf-autotable';
 import { formatToEcuador, ECUADOR_TIMEZONE } from './date-utils';
 
 // Global constants for branding parity
@@ -143,12 +144,15 @@ export interface PDFConfig {
   sellerName?: string;
 }
 
-export function generateProfessionalPDF(
+export async function generateProfessionalPDF(
   client: PDFClientInfo,
   items: any[],
   totals: PDFTotals | number,
   config: PDFConfig
 ) {
+  const { jsPDF } = await import('jspdf');
+  const autoTable = (await import('jspdf-autotable')).default;
+
   // Normalize totals
   let finalTotals: PDFTotals;
   if (typeof totals === 'number') {
@@ -389,7 +393,7 @@ export function generateProfessionalPDF(
  * Generates a professional Project Report PDF (Bitácora + Expenses)
  * Used by field operators for offline/online parity.
  */
-export function generateProjectReportPDF(data: {
+export async function generateProjectReportPDF(data: {
   project: any;
   clientName: string;
   address: string;
@@ -397,7 +401,10 @@ export function generateProjectReportPDF(data: {
   expenses: any[];
 }) {
   const { project, clientName, address, chat, expenses } = data;
+  const { jsPDF } = await import('jspdf');
+  const autoTable = (await import('jspdf-autotable')).default;
   const doc = new jsPDF();
+
   
   // 1. Header with custom project title
   addAquatechHeader(doc, 'REPORTE DE OBRA', `PROYECTO: ${project.title}`);

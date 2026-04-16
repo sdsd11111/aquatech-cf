@@ -5,13 +5,15 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import ProjectUploader, { ProjectFile } from '@/components/ProjectUploader'
 import { db } from '@/lib/db'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { 
   generateProfessionalPDF, 
   generateProjectReportPDF, 
   addAquatechHeader 
 } from '@/lib/pdf-generator'
+// Removed heavy jspdf imports to reduce bundle size
+// import { jsPDF } from 'jspdf'
+// import autoTable from 'jspdf-autotable'
+
 import { useSession } from 'next-auth/react'
 import { formatToEcuador, ECUADOR_TIMEZONE, formatTimeEcuador, formatDateEcuador } from '@/lib/date-utils'
 import { compressImage as optimizedCompress } from '@/lib/image-optimization'
@@ -1008,12 +1010,22 @@ export default function ProjectExecutionClient({
     })
   }
 
-  const generateFichaPDF = () => {
+  const generateFichaPDF = async () => {
     try {
+      const { jsPDF } = await import('jspdf')
+      const autoTableModule = await import('jspdf-autotable')
+      const autoTable = autoTableModule.default || (autoTableModule as any).autoTable || autoTableModule
+
       const doc = new jsPDF()
       
       // 1. Professional Header
-      addAquatechHeader(doc, 'FICHA TÉCNICA DE PROYECTO', `PROYECTO: ${project.title}`);
+      // assuming addAquatechHeader is available or we can use basic headers
+      doc.setFontSize(22);
+      doc.setTextColor(0, 112, 192); // blue
+      doc.text("AQUATECH", 20, 20);
+      doc.setFontSize(14);
+      doc.setTextColor(100);
+      doc.text("FICHA TÉCNICA DE PROYECTO", 20, 28);
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');

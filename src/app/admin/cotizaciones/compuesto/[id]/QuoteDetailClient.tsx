@@ -77,7 +77,7 @@ export default function QuoteDetailClient({ quote, projects = [] }: any) {
       }
 
       // Get the jsPDF instance
-      const doc = generateProfessionalPDF(clientInfo, items, totals, {
+      const doc = await generateProfessionalPDF(clientInfo, items, totals, {
         docType: 'COTIZACIÓN',
         docId: quote.id,
         notes: quote.notes,
@@ -115,7 +115,7 @@ export default function QuoteDetailClient({ quote, projects = [] }: any) {
     }
   }
   
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     const clientInfo = {
       name: quote.clientName || quote.client?.name || '',
       ruc: quote.clientRuc || quote.client?.ruc,
@@ -142,7 +142,7 @@ export default function QuoteDetailClient({ quote, projects = [] }: any) {
       totalAmount: Number(quote.totalAmount)
     }
 
-    generateProfessionalPDF(clientInfo, items, totals, {
+    await generateProfessionalPDF(clientInfo, items, totals, {
       docType: 'COTIZACIÓN',
       docId: quote.id,
       notes: quote.notes,

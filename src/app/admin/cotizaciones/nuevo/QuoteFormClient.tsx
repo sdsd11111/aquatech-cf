@@ -254,7 +254,7 @@ export default function QuoteFormClient({ clients, materials, projects = [], pre
           totalAmount: Number(calculations.grandTotal || 0)
         }
 
-        const doc = generateProfessionalPDF(clientInfo, payload.items, pdfTotals, {
+        const doc = await generateProfessionalPDF(clientInfo, payload.items, pdfTotals, {
           docType: 'COTIZACIÓN',
           docId: initialQuote?.id || 'TEMP',
           notes: payload.notes,

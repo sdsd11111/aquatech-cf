@@ -84,7 +84,7 @@ export default function QuotesListClient({ initialQuotes, activeProjects = [] }:
             totalAmount: Number(quote.totalAmount)
           }
 
-          const doc = generateProfessionalPDF(clientInfo, items, totals, {
+          const doc = await generateProfessionalPDF(clientInfo, items, totals, {
             docType: 'COTIZACIÓN',
             docId: quote.id,
             notes: quote.notes,

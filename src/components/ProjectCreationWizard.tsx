@@ -370,7 +370,7 @@ export default function ProjectCreationWizard({ panelBase = '/admin/proyectos' }
   // Total amount used in PDF generation
   const { subtotal0, subtotal15, ivaAmount, grandTotal, totalBudget } = budgetCalculations
 
-  const generatePDF = (preview = false) => {
+  const generatePDF = async (preview = false) => {
     const info = {
       name: clientData.name || 'Cliente Particular',
       ruc: clientData.ruc || '9999999999',
@@ -394,7 +394,7 @@ export default function ProjectCreationWizard({ panelBase = '/admin/proyectos' }
       totalAmount: grandTotal
     }
 
-    const result = generateProfessionalPDF(info, items, totalsObj, {
+    const result = await generateProfessionalPDF(info, items, totalsObj, {
       docType: 'PRESUPUESTO',
       docId: preview ? 'VISTA-PREVIA' : `PRJ-${Date.now().toString().slice(-4)}`,
       notes: projectData.technicalSpecs?.description || 'DOCUMENTO PRELIMINAR',
