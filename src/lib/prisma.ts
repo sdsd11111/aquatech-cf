@@ -7,22 +7,16 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 const createPrismaClient = () => {
-  // If we are in the Edge runtime (Cloudflare Workers/Pages)
-  if (process.env.NEXT_RUNTIME === 'edge') {
-    const connectionString = process.env.DATABASE_URL
-    
-    if (!connectionString) {
-      throw new Error('DATABASE_URL is not defined')
-    }
-
-    // Initialize the MariaDB adapter by passing the connection string directly.
-    // This allows the adapter to manage the pool internally and solves typing issues.
-    const adapter = new PrismaMariaDb(connectionString)
-    return new PrismaClient({ adapter })
+  const connectionString = process.env.DATABASE_URL
+  
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not defined')
   }
 
-  // Local development or non-edge environment
-  return new PrismaClient()
+  // Usar siempre el Adapter de MariaDB porque eliminamos el motor pesado de Prisma
+  // para poder cumplir con el límite de 3MB de Cloudflare Free Tier.
+  const adapter = new PrismaMariaDb(connectionString)
+  return new PrismaClient({ adapter })
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient()
