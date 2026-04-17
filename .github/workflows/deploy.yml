@@ -23,18 +23,12 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Generate Prisma Client
-        run: npx prisma generate --no-engine
-
-      - name: Remove Prisma WASM engines
-        run: find node_modules/.prisma -name "*.wasm" -delete 2>/dev/null || true
+        run: npx prisma generate
 
       - name: Build for Cloudflare
         run: npm run build:cf
         env:
           DATABASE_URL: "mysql://dummy:dummy@localhost:3306/dummy"
-
-      - name: Remove WASM from bundle
-        run: find .open-next -name "*.wasm" -delete 2>/dev/null || true
 
       - name: Deploy to Cloudflare
         run: npx wrangler deploy
