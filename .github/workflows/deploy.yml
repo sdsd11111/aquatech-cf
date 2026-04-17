@@ -31,7 +31,7 @@ jobs:
       - name: Build for Cloudflare
         run: npm run build:cf
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: "mysql://dummy:dummy@localhost:3306/dummy"
 
       - name: Remove WASM from bundle
         run: find .open-next -name "*.wasm" -delete 2>/dev/null || true
